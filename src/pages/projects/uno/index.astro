@@ -1,0 +1,22 @@
+---
+import UnoApp from '../../../components/uno/UnoApp';
+const serverUrl = import.meta.env.PUBLIC_SOCKET_URL || 'http://localhost:3001';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spicy Uno — jordanavery.dev</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body { overflow-x: hidden; }
+      a { color: inherit; }
+    </style>
+  </head>
+  <body>
+    <UnoApp client:only="react" serverUrl={serverUrl} />
+  </body>
+</html>

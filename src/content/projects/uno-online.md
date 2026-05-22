@@ -6,6 +6,7 @@ status: 'in-progress'
 pubDate: '2026-05-21'
 tags: ['typescript', 'realtime', 'side-project']
 featured: true
+demoUrl: 'https://jordanavery.dev/projects/uno/'
 ---
 
 ## The itch
