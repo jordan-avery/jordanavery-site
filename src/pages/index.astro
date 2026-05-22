@@ -1,8 +1,14 @@
 ---
 import BaseHead from '../components/BaseHead.astro';
-import Footer from '../components/Footer.astro';
 import Header from '../components/Header.astro';
-import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
+import Footer from '../components/Footer.astro';
+import { SITE_TITLE, SITE_DESCRIPTION } from '../consts';
+import { getCollection } from 'astro:content';
+import FormattedDate from '../components/FormattedDate.astro';
+
+const posts = (await getCollection('blog'))
+	.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf())
+	.slice(0, 3);
 ---
 
 <!doctype html>
@@ -13,37 +19,185 @@ import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
 	<body>
 		<Header />
 		<main>
-			<h1>🧑‍🚀 Hello, Astronaut!</h1>
-			<p>
-				Welcome to the official <a href="https://astro.build/">Astro</a> blog starter template. This template
-				serves as a lightweight, minimally-styled starting point for anyone looking to build a personal
-				website, blog, or portfolio with Astro.
-			</p>
-			<p>
-				This template comes with a few integrations already configured in your
-				<code>astro.config.mjs</code> file. You can customize your setup with
-				<a href="https://astro.build/integrations">Astro Integrations</a> to add tools like Tailwind,
-				React, or Vue to your project.
-			</p>
-			<p>Here are a few ideas on how to get started with the template:</p>
-			<ul>
-				<li>Edit this page in <code>src/pages/index.astro</code></li>
-				<li>Edit the site header items in <code>src/components/Header.astro</code></li>
-				<li>Add your name to the footer in <code>src/components/Footer.astro</code></li>
-				<li>Check out the included blog posts in <code>src/content/blog/</code></li>
-				<li>Customize the blog post page layout in <code>src/layouts/BlogPost.astro</code></li>
-			</ul>
-			<p>
-				Have fun! If you get stuck, remember to
-				<a href="https://docs.astro.build/">read the docs</a>
-				or <a href="https://astro.build/chat">join us on Discord</a> to ask questions.
-			</p>
-			<p>
-				Looking for a blog template with a bit more personality? Check out
-				<a href="https://github.com/Charca/astro-blog-template">astro-blog-template</a>
-				by <a href="https://twitter.com/Charca">Maxi Ferreira</a>.
-			</p>
+			<section class="hero">
+				<div class="hero-content">
+					<h1>Strategy, analysis, and the things in between.</h1>
+					<p class="lede">
+						I'm Jordan Avery — a Director of Strategy focused on data, cloud, and AI.
+						I help drive value for clients by designing foundational data systems,
+						building roadmaps, and creating frameworks that turn emerging technology
+						into practical business outcomes. I'm also pursuing an MS in Analytics
+						at Georgia Tech (where I did my ISyE undergrad), digging into what's
+						next in the space, and learning to build things of my own.
+						Atlanta-based; dad of two; disc golfer; currently deep in a Dresden Files reread.
+					</p>
+				</div>
+				<img class="hero-photo" src="/jordan-headshot.jpg" alt="Jordan Avery" width="160" height="160" />
+			</section>
+
+			<section>
+				<div class="section-header">
+					<h2>Selected work</h2>
+					<a href="/projects" class="see-all">All projects →</a>
+				</div>
+				<div class="project-grid">
+					<a href="/projects" class="project-card">
+						<h3>GEO &amp; emerging capabilities</h3>
+						<p>POVs and frameworks on generative engine optimization, AI strategy, and what's coming next in the data and cloud landscape.</p>
+					</a>
+					<a href="/projects" class="project-card">
+						<h3>Applied analytics</h3>
+						<p>Coursework, methods, and findings from Georgia Tech's MS in Analytics — posted in the open as I work through them.</p>
+					</a>
+					<a href="/projects" class="project-card">
+						<h3>Apps in progress</h3>
+						<p>Side projects I'm building, including a custom online Uno game for the in-person ruleset my friends and I have played for years.</p>
+					</a>
+				</div>
+			</section>
+
+			<section>
+				<div class="section-header">
+					<h2>Recent writing</h2>
+					<a href="/blog" class="see-all">All writing →</a>
+				</div>
+				<ul class="post-list">
+					{posts.map((post) => (
+						<li>
+							<a href={`/blog/${post.id}/`}>
+								<span class="post-title">{post.data.title}</span>
+								<FormattedDate date={post.data.pubDate} />
+							</a>
+							{post.data.description && <p class="post-excerpt">{post.data.description}</p>}
+						</li>
+					))}
+				</ul>
+			</section>
 		</main>
 		<Footer />
 	</body>
 </html>
+
+<style>
+	.hero {
+    padding: 2rem 0 3rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 2.5rem;
+	}
+.hero-content {
+    flex: 1;
+    min-width: 0;
+	}
+.hero-photo {
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 3px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--border);
+	}
+	.hero h1 {
+		font-size: 3rem;
+		max-width: 18ch;
+		line-height: 1.1;
+		margin-bottom: 1.5rem;
+	}
+	.hero .lede {
+		font-size: 1.15rem;
+		line-height: 1.65;
+		max-width: 60ch;
+	}
+	section + section {
+		margin-top: 4rem;
+	}
+	.section-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		margin-bottom: 1.5rem;
+	}
+	.section-header h2 {
+		margin: 0;
+	}
+	.see-all {
+		font-size: 0.95rem;
+		font-weight: 500;
+	}
+	.project-grid {
+		display: grid;
+		gap: 1.25rem;
+	}
+	.project-card {
+		display: block;
+		padding: 1.5rem;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: rgba(255, 255, 255, 0.4);
+		transition: all 0.2s ease;
+		color: var(--text);
+	}
+	.project-card:hover {
+		border-color: var(--accent);
+		transform: translateY(-2px);
+		text-decoration: none;
+	}
+	.project-card h3 {
+		font-size: 1.25rem;
+		margin: 0 0 0.5rem;
+		color: var(--text);
+	}
+	.project-card p {
+		font-size: 0.95rem;
+		color: var(--text-muted);
+		margin: 0;
+		line-height: 1.55;
+	}
+	.post-list {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+	}
+	.post-list li {
+		padding: 1.25rem 0;
+		border-bottom: 1px solid var(--border);
+		margin-bottom: 0;
+	}
+	.post-list li:last-child {
+		border-bottom: none;
+	}
+	.post-list > li > a {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 1rem;
+		color: var(--text);
+		margin-bottom: 0.35rem;
+	}
+	.post-list > li > a:hover {
+		color: var(--accent);
+		text-decoration: none;
+	}
+	.post-title {
+		font-family: var(--font-serif);
+		font-size: 1.2rem;
+		font-weight: 600;
+	}
+	.post-list time {
+		font-size: 0.85rem;
+		color: var(--text-muted);
+		white-space: nowrap;
+	}
+	.post-excerpt {
+		font-size: 0.95rem;
+		color: var(--text-muted);
+		margin: 0;
+	}
+	@media (max-width: 720px) {
+		.hero h1 { font-size: 2.25rem; }
+		.hero .lede { font-size: 1.05rem; }
+		.hero { flex-direction: column-reverse; gap: 1.5rem; }
+		.hero-photo { width: 120px; height: 120px; }
+	}
+</style>

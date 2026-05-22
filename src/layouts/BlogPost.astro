@@ -1,82 +1,46 @@
 ---
-import { Image } from 'astro:assets';
 import type { CollectionEntry } from 'astro:content';
 import BaseHead from '../components/BaseHead.astro';
+import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import FormattedDate from '../components/FormattedDate.astro';
-import Header from '../components/Header.astro';
 
 type Props = CollectionEntry<'blog'>['data'];
 
 const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
 ---
 
+<!doctype html>
 <html lang="en">
 	<head>
 		<BaseHead title={title} description={description} />
-		<style>
-			main {
-				width: calc(100% - 2em);
-				max-width: 100%;
-				margin: 0;
-			}
-			.hero-image {
-				width: 100%;
-			}
-			.hero-image img {
-				display: block;
-				margin: 0 auto;
-				border-radius: 12px;
-				box-shadow: var(--box-shadow);
-			}
-			.prose {
-				width: 720px;
-				max-width: calc(100% - 2em);
-				margin: auto;
-				padding: 1em;
-				color: rgb(var(--gray-dark));
-			}
-			.title {
-				margin-bottom: 1em;
-				padding: 1em 0;
-				text-align: center;
-				line-height: 1;
-			}
-			.title h1 {
-				margin: 0 0 0.5em 0;
-			}
-			.date {
-				margin-bottom: 0.5em;
-				color: rgb(var(--gray));
-			}
-			.last-updated-on {
-				font-style: italic;
-			}
-		</style>
 	</head>
-
 	<body>
 		<Header />
 		<main>
-			<article>
-				<div class="hero-image">
-					{heroImage && <Image width={1020} height={510} src={heroImage} alt="" />}
-				</div>
-				<div class="prose">
-					<div class="title">
-						<div class="date">
-							<FormattedDate date={pubDate} />
-							{
-								updatedDate && (
-									<div class="last-updated-on">
-										Last updated on <FormattedDate date={updatedDate} />
-									</div>
-								)
-							}
-						</div>
-						<h1>{title}</h1>
-						<hr />
+			<article class="blog-post">
+				<nav class="breadcrumb">
+					<a href="/blog">← All writing</a>
+				</nav>
+				<header class="post-header">
+					<h1>{title}</h1>
+					{description && <p class="description">{description}</p>}
+					<div class="meta">
+						<FormattedDate date={pubDate} />
+						{updatedDate && (
+							<>
+								<span class="separator">·</span>
+								<span>Updated <FormattedDate date={updatedDate} /></span>
+							</>
+						)}
 					</div>
+				</header>
+				{heroImage && (
+					<figure class="hero-image">
+						<img src={heroImage.src} alt="" />
+					</figure>
+				)}
+				<div class="post-content">
 					<slot />
 				</div>
 			</article>
@@ -84,3 +48,53 @@ const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
 		<Footer />
 	</body>
 </html>
+
+<style>
+	.breadcrumb {
+		font-size: 0.9rem;
+		color: var(--text-muted);
+		margin-bottom: 2rem;
+	}
+	.breadcrumb a {
+		color: var(--text-muted);
+	}
+	.breadcrumb a:hover {
+		color: var(--accent);
+	}
+	.post-header {
+		margin-bottom: 2rem;
+		padding-bottom: 1.5rem;
+		border-bottom: 1px solid var(--border);
+	}
+	.post-header h1 {
+		font-size: 2.5rem;
+		margin-bottom: 1rem;
+	}
+	.description {
+		font-size: 1.15rem;
+		color: var(--text-muted);
+		max-width: 60ch;
+		margin-bottom: 1rem;
+	}
+	.meta {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.9rem;
+		color: var(--text-muted);
+	}
+	.meta .separator { margin: 0 0.25rem; }
+	.hero-image {
+		margin: 0 0 2rem;
+	}
+	.hero-image img {
+		width: 100%;
+		border-radius: 8px;
+	}
+	.post-content :global(h2) {
+		margin-top: 2.5rem;
+	}
+	.post-content :global(h3) {
+		margin-top: 2rem;
+	}
+</style>

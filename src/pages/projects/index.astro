@@ -1,0 +1,184 @@
+---
+import BaseHead from '../../components/BaseHead.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+import { SITE_TITLE } from '../../consts';
+import { getCollection } from 'astro:content';
+
+const allProjects = (await getCollection('projects'))
+	.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+
+const categoryLabels = {
+	strategy: 'Strategy & POVs',
+	analytics: 'Applied Analytics',
+	builds: 'Builds & Apps',
+};
+
+const categoryDescriptions = {
+	strategy: 'Frameworks, point-of-view pieces, and research on emerging capabilities.',
+	analytics: 'Coursework, methods, and findings from the MS in Analytics at Georgia Tech.',
+	builds: 'Side projects in active development — and lessons from the building.',
+};
+
+const grouped = (['strategy', 'analytics', 'builds'] as const).map((cat) => ({
+	key: cat,
+	label: categoryLabels[cat],
+	description: categoryDescriptions[cat],
+	projects: allProjects.filter((p) => p.data.category === cat),
+}));
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<BaseHead title={`Projects — ${SITE_TITLE}`} description="Strategy POVs, analytics work, and applications by Jordan Avery." />
+	</head>
+	<body>
+		<Header />
+		<main>
+			<section class="projects-intro">
+				<h1>Projects</h1>
+				<p class="lede">
+					Things I've thought through, analyzed, or built — across the three areas
+					this site is about. Some are finished, some are in progress, all are
+					works of practice.
+				</p>
+			</section>
+
+			{grouped.map((group) => (
+				<section class="project-category">
+					<header class="category-header">
+						<h2>{group.label}</h2>
+						<p>{group.description}</p>
+					</header>
+					{group.projects.length === 0 ? (
+						<p class="empty-state">Nothing posted here yet — check back soon.</p>
+					) : (
+						<ul class="projects-list">
+							{group.projects.map((project) => (
+								<li>
+									<a href={`/projects/${project.id}/`} class="project-item">
+										<div class="project-meta">
+											<h3>{project.data.title}</h3>
+											{project.data.status === 'in-progress' && <span class="status status-progress">In progress</span>}
+											{project.data.status === 'shipped' && <span class="status status-shipped">Shipped</span>}
+											{project.data.status === 'archived' && <span class="status status-archived">Archived</span>}
+										</div>
+										<p>{project.data.description}</p>
+										{project.data.tags && project.data.tags.length > 0 && (
+											<div class="tags">
+												{project.data.tags.map((tag) => (
+													<span class="tag">{tag}</span>
+												))}
+											</div>
+										)}
+									</a>
+								</li>
+							))}
+						</ul>
+					)}
+				</section>
+			))}
+		</main>
+		<Footer />
+	</body>
+</html>
+
+<style>
+	.projects-intro {
+		margin-bottom: 3rem;
+	}
+	.projects-intro .lede {
+		font-size: 1.15rem;
+		max-width: 60ch;
+		color: var(--text);
+	}
+	.project-category {
+		margin-bottom: 3.5rem;
+	}
+	.category-header {
+		margin-bottom: 1.5rem;
+		padding-bottom: 0.75rem;
+		border-bottom: 1px solid var(--border);
+	}
+	.category-header h2 {
+		margin: 0 0 0.25rem;
+		font-size: 1.6rem;
+	}
+	.category-header p {
+		margin: 0;
+		color: var(--text-muted);
+		font-size: 0.95rem;
+		font-family: var(--font-sans);
+	}
+	.empty-state {
+		color: var(--text-muted);
+		font-style: italic;
+		padding: 0.5rem 0;
+	}
+	.projects-list {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+	}
+	.projects-list li {
+		margin-bottom: 0.75rem;
+	}
+	.project-item {
+		display: block;
+		padding: 1.25rem 1.5rem;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: rgba(255, 255, 255, 0.4);
+		color: var(--text);
+		transition: all 0.2s ease;
+	}
+	.project-item:hover {
+		border-color: var(--accent);
+		transform: translateY(-2px);
+		text-decoration: none;
+	}
+	.project-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 0.4rem;
+		flex-wrap: wrap;
+	}
+	.project-meta h3 {
+		font-size: 1.2rem;
+		margin: 0;
+		color: var(--text);
+	}
+	.status {
+		font-size: 0.72rem;
+		padding: 0.15rem 0.55rem;
+		border-radius: 999px;
+		font-family: var(--font-sans);
+		font-weight: 500;
+		letter-spacing: 0.02em;
+		text-transform: uppercase;
+	}
+	.status-progress { background: #f4e9d6; color: #8a4f17; }
+	.status-shipped  { background: #dfe9d8; color: #3a5a26; }
+	.status-archived { background: #e8e2d6; color: #5a5751; }
+	.project-item p {
+		margin: 0 0 0.6rem;
+		color: var(--text-muted);
+		font-size: 0.95rem;
+		line-height: 1.55;
+	}
+	.tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+	.tag {
+		font-size: 0.78rem;
+		font-family: var(--font-mono);
+		color: var(--text-muted);
+		background: var(--code-bg);
+		padding: 0.1rem 0.5rem;
+		border-radius: 4px;
+	}
+</style>

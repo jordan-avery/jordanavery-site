@@ -1,0 +1,164 @@
+---
+import { type CollectionEntry, getCollection, render } from 'astro:content';
+import BaseHead from '../../components/BaseHead.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+import FormattedDate from '../../components/FormattedDate.astro';
+import { SITE_TITLE } from '../../consts';
+
+export async function getStaticPaths() {
+	const projects = await getCollection('projects');
+	return projects.map((project) => ({
+		params: { slug: project.id },
+		props: project,
+	}));
+}
+type Props = CollectionEntry<'projects'>;
+
+const project = Astro.props;
+const { Content } = await render(project);
+
+const categoryLabels = {
+	strategy: 'Strategy & POVs',
+	analytics: 'Applied Analytics',
+	builds: 'Builds & Apps',
+};
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<BaseHead title={`${project.data.title} — ${SITE_TITLE}`} description={project.data.description} />
+	</head>
+	<body>
+		<Header />
+		<main>
+			<article class="project-detail">
+				<nav class="breadcrumb">
+					<a href="/projects">← All projects</a>
+					<span class="separator">·</span>
+					<span class="category">{categoryLabels[project.data.category]}</span>
+				</nav>
+
+				<header class="project-header">
+					<div class="title-row">
+						<h1>{project.data.title}</h1>
+						{project.data.status === 'in-progress' && <span class="status status-progress">In progress</span>}
+						{project.data.status === 'shipped' && <span class="status status-shipped">Shipped</span>}
+						{project.data.status === 'archived' && <span class="status status-archived">Archived</span>}
+					</div>
+					<p class="description">{project.data.description}</p>
+
+					<div class="meta-row">
+						<FormattedDate date={project.data.pubDate} />
+						{project.data.updatedDate && (
+							<>
+								<span class="separator">·</span>
+								<span>Updated <FormattedDate date={project.data.updatedDate} /></span>
+							</>
+						)}
+						{(project.data.repoUrl || project.data.demoUrl) && (
+							<span class="separator">·</span>
+						)}
+						{project.data.repoUrl && (
+							<a href={project.data.repoUrl} target="_blank" rel="noopener noreferrer">Repo ↗</a>
+						)}
+						{project.data.demoUrl && (
+							<a href={project.data.demoUrl} target="_blank" rel="noopener noreferrer">Live demo ↗</a>
+						)}
+					</div>
+
+					{project.data.tags && project.data.tags.length > 0 && (
+						<div class="tags">
+							{project.data.tags.map((tag) => (
+								<span class="tag">{tag}</span>
+							))}
+						</div>
+					)}
+				</header>
+
+				<div class="project-content">
+					<Content />
+				</div>
+			</article>
+		</main>
+		<Footer />
+	</body>
+</html>
+
+<style>
+	.breadcrumb {
+		font-size: 0.9rem;
+		color: var(--text-muted);
+		margin-bottom: 2rem;
+	}
+	.breadcrumb a {
+		color: var(--text-muted);
+	}
+	.breadcrumb a:hover {
+		color: var(--accent);
+	}
+	.breadcrumb .separator {
+		margin: 0 0.5rem;
+	}
+	.project-header {
+		margin-bottom: 3rem;
+		padding-bottom: 2rem;
+		border-bottom: 1px solid var(--border);
+	}
+	.title-row {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		flex-wrap: wrap;
+		margin-bottom: 0.75rem;
+	}
+	.title-row h1 {
+		margin: 0;
+		font-size: 2.5rem;
+	}
+	.description {
+		font-size: 1.15rem;
+		color: var(--text-muted);
+		margin-bottom: 1.25rem;
+		max-width: 60ch;
+	}
+	.meta-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+		font-size: 0.9rem;
+		color: var(--text-muted);
+		margin-bottom: 1rem;
+	}
+	.meta-row .separator { margin: 0 0.25rem; }
+	.status {
+		font-size: 0.72rem;
+		padding: 0.2rem 0.6rem;
+		border-radius: 999px;
+		font-family: var(--font-sans);
+		font-weight: 500;
+		letter-spacing: 0.02em;
+		text-transform: uppercase;
+	}
+	.status-progress { background: #f4e9d6; color: #8a4f17; }
+	.status-shipped  { background: #dfe9d8; color: #3a5a26; }
+	.status-archived { background: #e8e2d6; color: #5a5751; }
+	.tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+	.tag {
+		font-size: 0.78rem;
+		font-family: var(--font-mono);
+		color: var(--text-muted);
+		background: var(--code-bg);
+		padding: 0.1rem 0.5rem;
+		border-radius: 4px;
+	}
+	.project-content :global(h2) {
+		margin-top: 2.5rem;
+	}
+</style>
