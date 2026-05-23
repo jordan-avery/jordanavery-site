@@ -673,12 +673,12 @@ io.on('connection', (socket) => {
     g.helpState = null;
 
     if (canPlayOnTurn(offer.card, g.currentColor, g.topCard, null)) {
-      g.phase = 'help'; // stay in help phase so player can play the received card
-      g.helpState = { requestingPlayerId: socket.id, offers: [] };
+      g.phase = 'playing';
+      g.helpState = null;
       socket.emit('must-play', serializeCard(offer.card));
     } else {
-      g.phase = 'help'; // still on their turn, can draw or ask again
-      g.helpState = { requestingPlayerId: socket.id, offers: [] };
+      g.phase = 'playing';
+      g.helpState = null;
     }
 
     io.to(fromPlayerId).emit('your-hand', fromPlayer.hand.map(serializeCard));
