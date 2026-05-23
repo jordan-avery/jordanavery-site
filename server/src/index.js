@@ -392,8 +392,14 @@ app.use((req, res, next) => {
 });
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: CORS_ORIGIN === '*' ? true : CORS_ORIGIN, methods: ['GET', 'POST'] },
+  cors: { origin: true, credentials: true, methods: ['GET', 'POST'] },
 });
+io.engine.on('initial_headers', (headers) => {
+  headers['Access-Control-Allow-Origin'] = CORS_ORIGIN === '*' ? '*' : CORS_ORIGIN;
+  headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';
+  headers['Vary'] = 'Origin';
+});
+console.log('CORS_ORIGIN:', CORS_ORIGIN);
 
 app.get('/health', (_, res) => res.json({ ok: true }));
 
