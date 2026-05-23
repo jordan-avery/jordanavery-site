@@ -378,9 +378,21 @@ function handleStartingPlay(io, room, socketId, card, chosenColor) {
 // ─── Socket.io setup ──────────────────────────────────────────────────────
 
 const app = express();
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (CORS_ORIGIN === '*' || origin === CORS_ORIGIN) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  } else if (!origin) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: CORS_ORIGIN, methods: ['GET', 'POST'] },
+  cors: { origin: CORS_ORIGIN === '*' ? true : CORS_ORIGIN, methods: ['GET', 'POST'] },
 });
 
 app.get('/health', (_, res) => res.json({ ok: true }));
