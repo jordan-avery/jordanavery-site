@@ -36,7 +36,7 @@ export default function UnoApp({ serverUrl }: Props) {
   }
 
   useEffect(() => {
-    const socket = io(serverUrl, { transports: ['websocket', 'polling'] });
+    const socket = io(serverUrl, { transports: ['polling', 'websocket'] });
     socketRef.current = socket;
 
     socket.on('connect', () => {
