@@ -393,11 +393,8 @@ app.use((req, res, next) => {
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: true, credentials: true, methods: ['GET', 'POST'] },
-});
-io.engine.on('initial_headers', (headers) => {
-  headers['Access-Control-Allow-Origin'] = CORS_ORIGIN === '*' ? '*' : CORS_ORIGIN;
-  headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';
-  headers['Vary'] = 'Origin';
+  transports: ['websocket', 'polling'],
+  allowRequest: (req, callback) => callback(null, true),
 });
 console.log('CORS_ORIGIN:', CORS_ORIGIN);
 
