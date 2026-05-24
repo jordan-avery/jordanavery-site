@@ -96,6 +96,11 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
   const [showSignModal, setShowSignModal] = useState(false);
   const [cardSignedDisplay, setCardSignedDisplay] = useState(false);
   const handRef = useRef<HTMLDivElement>(null);
+  const [shakingCardId, setShakingCardId] = useState<string | null>(null);
+  const [showInvalidHint, setShowInvalidHint] = useState(false);
+  const [newCardIds, setNewCardIds] = useState<Set<string>>(new Set());
+  const prevHandIdsRef = useRef<Set<string>>(new Set());
+  const shakeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Pending draw countdown
   useEffect(() => {
@@ -116,6 +121,18 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
       setCardSignedDisplay(true);
     }
   }, [game?.phase, game?.winner, cardSignedData, mySocketId]);
+
+  // Track newly added cards for deal animation
+  useEffect(() => {
+    const prev = prevHandIdsRef.current;
+    const added = myHand.filter(c => !prev.has(c.id)).map(c => c.id);
+    prevHandIdsRef.current = new Set(myHand.map(c => c.id));
+    if (added.length > 0) {
+      setNewCardIds(new Set(added));
+      const t = setTimeout(() => setNewCardIds(new Set()), 900);
+      return () => clearTimeout(t);
+    }
+  }, [myHand]);
 
   if (!game) return <div className="felt-bg"><p style={{ color: '#fff', padding: 20 }}>Waiting for game…</p></div>;
 
@@ -150,9 +167,19 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
   const iMustCallUno = myUnoState?.playerId === mySocketId && !myPlayer?.hasCalledUno;
   const canCatchUno = myUnoState?.expired && myUnoState?.playerId !== mySocketId && !isSpectator;
 
+  function triggerShake(cardId: string) {
+    if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current);
+    setShakingCardId(cardId);
+    setShowInvalidHint(true);
+    shakeTimerRef.current = setTimeout(() => {
+      setShakingCardId(null);
+      setShowInvalidHint(false);
+    }, 600);
+  }
+
   function handleCardClick(card: CardType) {
     if (isSpectator) return;
-    if (mustPlayCardId && card.id !== mustPlayCardId) return;
+    if (mustPlayCardId && card.id !== mustPlayCardId) { triggerShake(card.id); return; }
 
     // Offering help
     if (imOfferingHelp) {
@@ -172,7 +199,7 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
     const eligible = isMyStartingTurn
       ? true // will be validated by server
       : (canActOnTurn ? isPlayableOnTurn(card, game) : isPlayableOutOfTurn(card, game));
-    if (!eligible) return;
+    if (!eligible) { if (isMyTurn || amHelper || isMyStartingTurn) triggerShake(card.id); return; }
 
     if (card.type === 'wild' || card.type === 'wild4') {
       setSelectedCardId(card.id);
@@ -361,14 +388,19 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
               ? 'Your turn'
               : `${roomState.players[game.currentPlayerIndex]?.name || '?'}'s turn`}
           </div>
-          <div className="deck-count">Deck: {game.deckCount}</div>
         </div>
 
         {/* Center + sidebar */}
         <div className="game-center-row">
           {/* Discard + draw area */}
           <div className="discard-area">
-            {game.topCard && <Card card={game.topCard} size="lg" showSignature />}
+            <div className="table-center">
+              <div className={`deck-pile${canDraw ? ' clickable' : ''}`} onClick={canDraw ? () => socket.emit('draw-card') : undefined}>
+                <CardBack size="lg" />
+                <div className="deck-pile-count">{game.deckCount}</div>
+              </div>
+              {game.topCard && <Card card={game.topCard} size="lg" showSignature />}
+            </div>
 
             {/* Pending draw timer */}
             {game.phase === 'pending-draw' && game.pendingDraw && (
@@ -435,7 +467,7 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
 
               <div className="action-btns">
                 <button
-                  className="btn-draw"
+                  className={`btn-draw${canDraw ? ' must-draw' : ''}`}
                   disabled={!canDraw}
                   onClick={() => socket.emit('draw-card')}
                 >
@@ -464,7 +496,7 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
             </div>
 
             {/* Cards */}
-            <div className="hand-cards" ref={handRef}>
+            <div className={`hand-cards${canActOnTurn && !mustPlayCardId ? ' my-turn' : ''}`} ref={handRef}>
               {sortedHand.map(card => {
                 const onTurn = isPlayableOnTurn(card, game);
                 const outOfTurn = !isMyTurn && !isMyStartingTurn && isPlayableOutOfTurn(card, game);
@@ -472,8 +504,15 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
                 const playable = isActiveTurn ? onTurn : outOfTurn;
                 const isMust = mustPlayCardId === card.id;
                 const isOfferTarget = imOfferingHelp;
+                const isShaking = shakingCardId === card.id;
+                const isNewCard = newCardIds.has(card.id);
+                const newCardIdx = isNewCard ? [...newCardIds].indexOf(card.id) : 0;
                 return (
-                  <div key={card.id} className={`hand-card-wrap${isMust ? ' must-play-wrap' : ''}`}>
+                  <div
+                    key={card.id}
+                    className={`hand-card-wrap${isMust ? ' must-play-wrap' : ''}${isShaking ? ' card-shaking' : ''}${isNewCard ? ' card-new' : ''}`}
+                    style={isNewCard ? { animationDelay: `${newCardIdx * 55}ms` } : undefined}
+                  >
                     <Card
                       card={card}
                       size="md"
@@ -486,6 +525,7 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
                 );
               })}
             </div>
+            {showInvalidHint && <div className="invalid-hint">Invalid card — select another</div>}
           </div>
         )}
 

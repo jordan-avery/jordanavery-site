@@ -14,6 +14,7 @@ export default function SignatureModal({ winnerName, cardLabel, onSign, onSkip }
   const drawing = useRef(false);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
 
+  // Initialize canvas when switching to draw tab
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -26,36 +27,75 @@ export default function SignatureModal({ winnerName, cardLabel, onSign, onSkip }
     ctx.lineJoin = 'round';
   }, [tab]);
 
-  function getPos(e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    if ('touches' in e) {
+  // Non-passive touch listeners so preventDefault works on mobile
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || tab !== 'draw') return;
+
+    function getPos(clientX: number, clientY: number) {
+      const rect = canvas!.getBoundingClientRect();
       return {
-        x: (e.touches[0].clientX - rect.left) * scaleX,
-        y: (e.touches[0].clientY - rect.top) * scaleY,
+        x: (clientX - rect.left) * (canvas!.width / rect.width),
+        y: (clientY - rect.top) * (canvas!.height / rect.height),
       };
     }
+
+    function onTouchStart(e: TouchEvent) {
+      e.preventDefault();
+      drawing.current = true;
+      lastPos.current = getPos(e.touches[0].clientX, e.touches[0].clientY);
+    }
+
+    function onTouchMove(e: TouchEvent) {
+      if (!drawing.current) return;
+      e.preventDefault();
+      const ctx = canvas!.getContext('2d')!;
+      const pos = getPos(e.touches[0].clientX, e.touches[0].clientY);
+      if (lastPos.current) {
+        ctx.beginPath();
+        ctx.moveTo(lastPos.current.x, lastPos.current.y);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+      }
+      lastPos.current = pos;
+    }
+
+    function onTouchEnd() {
+      drawing.current = false;
+      lastPos.current = null;
+    }
+
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd);
+
+    return () => {
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove', onTouchMove);
+      canvas.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [tab]);
+
+  function getMousePos(e: React.MouseEvent, canvas: HTMLCanvasElement) {
+    const rect = canvas.getBoundingClientRect();
     return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
+      x: (e.clientX - rect.left) * (canvas.width / rect.width),
+      y: (e.clientY - rect.top) * (canvas.height / rect.height),
     };
   }
 
-  function startDraw(e: React.MouseEvent | React.TouchEvent) {
+  function startDraw(e: React.MouseEvent) {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    e.preventDefault();
     drawing.current = true;
-    lastPos.current = getPos(e, canvas);
+    lastPos.current = getMousePos(e, canvas);
   }
 
-  function continueDraw(e: React.MouseEvent | React.TouchEvent) {
+  function continueDraw(e: React.MouseEvent) {
     const canvas = canvasRef.current;
     if (!canvas || !drawing.current) return;
-    e.preventDefault();
     const ctx = canvas.getContext('2d')!;
-    const pos = getPos(e, canvas);
+    const pos = getMousePos(e, canvas);
     if (lastPos.current) {
       ctx.beginPath();
       ctx.moveTo(lastPos.current.x, lastPos.current.y);
@@ -83,9 +123,7 @@ export default function SignatureModal({ winnerName, cardLabel, onSign, onSkip }
       onSign({ text: text.trim() || undefined });
     } else {
       const canvas = canvasRef.current;
-      if (canvas) {
-        onSign({ drawing: canvas.toDataURL('image/png') });
-      }
+      if (canvas) onSign({ drawing: canvas.toDataURL('image/png') });
     }
   }
 
@@ -122,9 +160,7 @@ export default function SignatureModal({ winnerName, cardLabel, onSign, onSkip }
               onMouseMove={continueDraw}
               onMouseUp={endDraw}
               onMouseLeave={endDraw}
-              onTouchStart={startDraw}
-              onTouchMove={continueDraw}
-              onTouchEnd={endDraw}
+              style={{ touchAction: 'none' }}
             />
             <button className="clear-btn" onClick={clearCanvas}>Clear</button>
           </div>

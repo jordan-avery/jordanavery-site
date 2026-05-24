@@ -482,6 +482,17 @@ io.on('connection', (socket) => {
     do { topCard = deck.pop(); if (topCard.type === 'wild' || topCard.type === 'wild4') deck.unshift(topCard); }
     while (topCard.type === 'wild' || topCard.type === 'wild4');
 
+    // Re-flip if no player has an eligible starting card
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const anyEligible = room.players.some(p =>
+        p.hand.some(c => canPlayInStarting(c, topCard.color, topCard))
+      );
+      if (anyEligible) break;
+      deck.unshift(topCard);
+      do { topCard = deck.pop(); if (topCard.type === 'wild' || topCard.type === 'wild4') deck.unshift(topCard); }
+      while (topCard.type === 'wild' || topCard.type === 'wild4');
+    }
+
     room.status = 'playing';
     room.game = {
       phase: 'starting',
