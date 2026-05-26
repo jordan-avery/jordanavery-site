@@ -50,8 +50,13 @@ export interface UnoState {
   expired: boolean;
 }
 
+export interface PileSelectState {
+  pileCount: number;
+  claims: Record<number, string>; // pileIndex -> socketId
+}
+
 export interface GameState {
-  phase: 'starting' | 'playing' | 'pending-draw' | 'help' | 'zero-trade' | 'slap' | 'winner';
+  phase: 'pile-select' | 'starting' | 'playing' | 'pending-draw' | 'help' | 'zero-trade' | 'slap' | 'winner';
   topCard: Card | null;
   currentColor: 'red' | 'yellow' | 'blue' | 'green' | 'wild';
   currentPlayerIndex: number;
@@ -67,6 +72,7 @@ export interface GameState {
   winnerCard: Card | null;
   unoState: UnoState | null;
   startingState: { firstPlayerIndex: number } | null;
+  pileSelectState: PileSelectState | null;
 }
 
 export interface RoomState {

@@ -146,6 +146,10 @@ function buildPublicState(room) {
         expired: g.unoState.expired,
       } : null,
       startingState: g.startingState || null,
+      pileSelectState: g.pileSelectState ? {
+        pileCount: g.pileSelectState.piles.length,
+        claims: g.pileSelectState.claims,
+      } : null,
     } : null,
   };
 }
@@ -471,31 +475,24 @@ io.on('connection', (socket) => {
     }
 
     const deck = shuffle(createFullDeck());
-    const hands = room.players.map(() => []);
-    for (let i = 0; i < HAND_SIZE; i++) {
-      for (const hand of hands) hand.push(deck.pop());
+
+    // Deal piles face-down — players will choose which one to take
+    const piles = [];
+    for (let i = 0; i < room.players.length; i++) {
+      const pile = [];
+      for (let j = 0; j < HAND_SIZE; j++) pile.push(deck.pop());
+      piles.push(pile);
     }
-    room.players.forEach((p, i) => { p.hand = hands[i]; p.hasCalledUno = false; p.unoEligible = false; });
+    room.players.forEach(p => { p.hand = []; p.hasCalledUno = false; p.unoEligible = false; });
 
     // Draw starting card (skip wilds)
     let topCard;
     do { topCard = deck.pop(); if (topCard.type === 'wild' || topCard.type === 'wild4') deck.unshift(topCard); }
     while (topCard.type === 'wild' || topCard.type === 'wild4');
 
-    // Re-flip if no player has an eligible starting card
-    for (let attempt = 0; attempt < 12; attempt++) {
-      const anyEligible = room.players.some(p =>
-        p.hand.some(c => canPlayInStarting(c, topCard.color, topCard))
-      );
-      if (anyEligible) break;
-      deck.unshift(topCard);
-      do { topCard = deck.pop(); if (topCard.type === 'wild' || topCard.type === 'wild4') deck.unshift(topCard); }
-      while (topCard.type === 'wild' || topCard.type === 'wild4');
-    }
-
     room.status = 'playing';
     room.game = {
-      phase: 'starting',
+      phase: 'pile-select',
       deck,
       discardPile: [topCard],
       topCard,
@@ -511,7 +508,64 @@ io.on('connection', (socket) => {
       winnerCard: null,
       unoState: null,
       startingState: { firstPlayerIndex: -1 },
+      pileSelectState: { piles, claims: {} },
     };
+    broadcastRoomState(io, room);
+  });
+
+  // ── Claim pile ──
+  socket.on('claim-pile', ({ pileIndex }) => {
+    const room = rooms.get(socketToRoom.get(socket.id));
+    if (!room || !room.game || room.game.phase !== 'pile-select') return;
+    const g = room.game;
+    const ps = g.pileSelectState;
+    if (!ps) return;
+
+    const playerIdx = getPlayerIndex(room, socket.id);
+    if (playerIdx === -1) return; // spectators can't claim
+
+    if (pileIndex < 0 || pileIndex >= ps.piles.length) return;
+    // Already claimed a pile
+    if (Object.values(ps.claims).includes(socket.id)) return;
+    // Pile already taken by someone else
+    if (ps.claims[pileIndex] !== undefined) {
+      return socket.emit('game-error', 'That pile was just taken — pick another!');
+    }
+
+    ps.claims[pileIndex] = socket.id;
+
+    if (Object.keys(ps.claims).length === room.players.length) {
+      // Assign hands from claimed piles
+      for (const [idx, socketId] of Object.entries(ps.claims)) {
+        const player = getPlayer(room, socketId);
+        if (player) {
+          player.hand = ps.piles[parseInt(idx)];
+          player.hasCalledUno = false;
+          player.unoEligible = false;
+        }
+      }
+
+      // Re-flip starting card if no player has an eligible starting card
+      for (let attempt = 0; attempt < 12; attempt++) {
+        const anyEligible = room.players.some(p =>
+          p.hand.some(c => canPlayInStarting(c, g.topCard.color, g.topCard))
+        );
+        if (anyEligible) break;
+        g.deck.unshift(g.topCard);
+        let newTop;
+        do {
+          newTop = g.deck.pop();
+          if (newTop.type === 'wild' || newTop.type === 'wild4') g.deck.unshift(newTop);
+        } while (newTop.type === 'wild' || newTop.type === 'wild4');
+        g.topCard = newTop;
+        g.currentColor = newTop.color;
+        g.discardPile = [newTop];
+      }
+
+      g.phase = 'starting';
+      g.pileSelectState = null;
+    }
+
     broadcastRoomState(io, room);
   });
 
@@ -556,8 +610,8 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Slap / zero-trade / winner phases block regular play
-    if (['slap', 'zero-trade', 'winner'].includes(g.phase)) {
+    // These phases block regular play
+    if (['slap', 'zero-trade', 'winner', 'pile-select'].includes(g.phase)) {
       return socket.emit('game-error', 'Cannot play right now.');
     }
 

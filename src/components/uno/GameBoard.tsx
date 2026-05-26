@@ -101,6 +101,7 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
   const [newCardIds, setNewCardIds] = useState<Set<string>>(new Set());
   const prevHandIdsRef = useRef<Set<string>>(new Set());
   const shakeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pilesDealDone, setPilesDealDone] = useState(false);
 
   // Pending draw countdown
   useEffect(() => {
@@ -133,6 +134,16 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
       return () => clearTimeout(t);
     }
   }, [myHand]);
+
+  // Unlock pile clicking after deal animation finishes
+  useEffect(() => {
+    if (game?.phase === 'pile-select' && game.pileSelectState) {
+      setPilesDealDone(false);
+      const delay = game.pileSelectState.pileCount * 240 + 500;
+      const t = setTimeout(() => setPilesDealDone(true), delay);
+      return () => clearTimeout(t);
+    }
+  }, [game?.phase]);
 
   if (!game) return <div className="felt-bg"><p style={{ color: '#fff', padding: 20 }}>Waiting for game…</p></div>;
 
@@ -221,6 +232,86 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
   function handleSlap() {
     playSlap();
     socket.emit('slap');
+  }
+
+  if (game.phase === 'pile-select' && game.pileSelectState) {
+    const ps = game.pileSelectState;
+    const myClaimedEntry = Object.entries(ps.claims).find(([, sid]) => sid === mySocketId);
+    const myClaimed = !!myClaimedEntry;
+    const claimedCount = Object.keys(ps.claims).length;
+    const allClaimed = claimedCount === roomState.players.length;
+
+    return (
+      <div className="felt-bg">
+        {notification && (
+          <div className={`notif-toast notif-${notifType}`} onClick={onClearNotif}>
+            {notification}
+          </div>
+        )}
+        <div className="pile-select-screen">
+          <div className="pile-select-header">
+            <div className="pile-select-title">
+              {allClaimed ? '🃏 Dealing in…' : myClaimed ? 'Waiting for others…' : 'Choose Your Hand'}
+            </div>
+            <p className="pile-select-sub">
+              {allClaimed
+                ? 'Everyone has chosen!'
+                : myClaimed
+                ? `${claimedCount} / ${roomState.players.length} chosen`
+                : 'Pick any pile — no peeking!'}
+            </p>
+          </div>
+
+          {game.topCard && (
+            <div className="pile-top-card-row">
+              <span className="pile-top-card-label">Starting card</span>
+              <Card card={game.topCard} size="md" />
+            </div>
+          )}
+
+          <div className="pile-select-piles">
+            {Array.from({ length: ps.pileCount }).map((_, i) => {
+              const claimedBySocketId = ps.claims[i];
+              const claimedByPlayer = claimedBySocketId
+                ? roomState.players.find(p => p.socketId === claimedBySocketId)
+                : null;
+              const isMine = claimedBySocketId === mySocketId;
+              const isClaimed = !!claimedBySocketId;
+              const isClickable = pilesDealDone && !isSpectator && !myClaimed && !isClaimed;
+
+              return (
+                <div
+                  key={i}
+                  className={`pile-item${isClickable ? ' pile-clickable' : ''}${isMine ? ' pile-mine' : ''}${isClaimed && !isMine ? ' pile-taken' : ''}`}
+                  style={{ animationDelay: `${i * 240}ms` }}
+                  onClick={isClickable ? () => socket.emit('claim-pile', { pileIndex: i }) : undefined}
+                >
+                  <div className="pile-stack-wrap">
+                    <div className="pile-cards-vis">
+                      {Array.from({ length: 7 }).map((_, j) => (
+                        <div
+                          key={j}
+                          className="pile-card-back"
+                          style={{ bottom: j * 3, zIndex: j }}
+                        />
+                      ))}
+                    </div>
+                    <div className="pile-card-count">7</div>
+                  </div>
+                  <div className="pile-label">
+                    {isMine ? '✓ Yours!' : claimedByPlayer ? claimedByPlayer.name : `Pile ${i + 1}`}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {isSpectator && (
+            <p className="pile-select-spectator">Spectating — players are choosing their hands</p>
+          )}
+        </div>
+      </div>
+    );
   }
 
   const activeColorHex = COLOR_HEX[game.currentColor] || '#888';
