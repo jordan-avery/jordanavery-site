@@ -139,7 +139,8 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
   useEffect(() => {
     if (game?.phase === 'pile-select' && game.pileSelectState) {
       setPilesDealDone(false);
-      const delay = game.pileSelectState.pileCount * 240 + 500;
+      // Round-robin: last card is at step (7 * pileCount - 1), each step = 80ms, plus 280ms animation
+      const delay = (7 * game.pileSelectState.pileCount - 1) * 80 + 450;
       const t = setTimeout(() => setPilesDealDone(true), delay);
       return () => clearTimeout(t);
     }
@@ -251,10 +252,18 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
         <div className="pile-select-screen">
           <div className="pile-select-header">
             <div className="pile-select-title">
-              {allClaimed ? '🃏 Dealing in…' : myClaimed ? 'Waiting for others…' : 'Choose Your Hand'}
+              {!pilesDealDone
+                ? 'Dealing your hands…'
+                : allClaimed
+                ? '🃏 Starting…'
+                : myClaimed
+                ? 'Waiting for others…'
+                : 'Choose Your Hand'}
             </div>
             <p className="pile-select-sub">
-              {allClaimed
+              {!pilesDealDone
+                ? ''
+                : allClaimed
                 ? 'Everyone has chosen!'
                 : myClaimed
                 ? `${claimedCount} / ${roomState.players.length} chosen`
@@ -262,7 +271,19 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
             </p>
           </div>
 
-          {game.topCard && (
+          {/* Dealer deck shown while dealing */}
+          {!pilesDealDone && (
+            <div className="pile-dealer-area">
+              <div className="pile-dealer-label">Deck</div>
+              <div className="pile-dealer-deck">
+                <CardBack size="md" />
+                <div className="pile-dealer-count">{ps.pileCount * 7}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Starting card shown after dealing */}
+          {pilesDealDone && game.topCard && (
             <div className="pile-top-card-row">
               <span className="pile-top-card-label">Starting card</span>
               <Card card={game.topCard} size="md" />
@@ -278,12 +299,13 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
               const isMine = claimedBySocketId === mySocketId;
               const isClaimed = !!claimedBySocketId;
               const isClickable = pilesDealDone && !isSpectator && !myClaimed && !isClaimed;
+              // Horizontal start offset biased toward center (simulates flying from center deck)
+              const centerOffset = Math.round((i - (ps.pileCount - 1) / 2) * -40);
 
               return (
                 <div
                   key={i}
                   className={`pile-item${isClickable ? ' pile-clickable' : ''}${isMine ? ' pile-mine' : ''}${isClaimed && !isMine ? ' pile-taken' : ''}`}
-                  style={{ animationDelay: `${i * 240}ms` }}
                   onClick={isClickable ? () => socket.emit('claim-pile', { pileIndex: i }) : undefined}
                 >
                   <div className="pile-stack-wrap">
@@ -292,7 +314,12 @@ export default function GameBoard({ socket, roomState, myHand, mySocketId, sortM
                         <div
                           key={j}
                           className="pile-card-back"
-                          style={{ bottom: j * 3, zIndex: j }}
+                          style={{
+                            bottom: j * 3,
+                            zIndex: j,
+                            '--tx-start': `${centerOffset}px`,
+                            animationDelay: `${(j * ps.pileCount + i) * 80}ms`,
+                          } as React.CSSProperties}
                         />
                       ))}
                     </div>
