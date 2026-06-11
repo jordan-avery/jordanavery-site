@@ -29,8 +29,11 @@ export default function Lobby({ socket, screen, playerName, roomState, mySocketI
       <div className="lobby-screen">
         <div className="lobby-card">
           <div className="lobby-logo">
+            <div className="logo-spicy-row">
+              <span className="logo-chili">🌶</span>
+              <span className="logo-spicy">S P I C Y</span>
+            </div>
             <span className="logo-uno">UNO</span>
-            <span className="logo-spicy">Spicy</span>
           </div>
           <form onSubmit={handleAuth} className="auth-form">
             <label>Password</label>
@@ -58,8 +61,11 @@ export default function Lobby({ socket, screen, playerName, roomState, mySocketI
         <div className="lobby-card room-card">
           <div className="room-header">
             <div className="lobby-logo small">
+              <div className="logo-spicy-row">
+                <span className="logo-chili">🌶</span>
+                <span className="logo-spicy">S P I C Y</span>
+              </div>
               <span className="logo-uno">UNO</span>
-              <span className="logo-spicy">Spicy</span>
             </div>
             <div className="room-code-display">
               <span className="room-code-label">Room Code</span>

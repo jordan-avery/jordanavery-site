@@ -45,24 +45,65 @@
   line-height: 1;
 }
 .lobby-logo.small { margin-bottom: -.5rem; }
+
+.logo-spicy-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .3rem;
+  margin-bottom: .15rem;
+}
+
+.logo-chili {
+  font-size: .9rem;
+  display: inline-block;
+  animation: chili-shake 3.5s ease-in-out infinite;
+}
+.lobby-logo.small .logo-chili { font-size: .7rem; }
+
+@keyframes chili-shake {
+  0%, 72%, 100% { transform: rotate(0deg) scale(1); }
+  76% { transform: rotate(-18deg) scale(1.2); }
+  80% { transform: rotate(18deg) scale(1.2); }
+  84% { transform: rotate(-10deg) scale(1.1); }
+  88% { transform: rotate(6deg) scale(1.05); }
+  92% { transform: rotate(0deg) scale(1); }
+}
+
+.logo-spicy {
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .28em;
+  background: linear-gradient(to right, #FFD600, #FF6D00, #D32F2F);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.lobby-logo.small .logo-spicy { font-size: .55rem; letter-spacing: .2em; }
+
 .logo-uno {
   display: block;
   font-size: 4rem;
   font-weight: 900;
   font-family: Impact, sans-serif;
-  color: #E53935;
   letter-spacing: -2px;
-  text-shadow: 3px 3px 0 #000, -1px -1px 0 #000;
+  background: linear-gradient(to bottom, #FFD600 0%, #FF8F00 45%, #C62828 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: ember-glow 2.5s ease-in-out infinite;
 }
 .lobby-logo.small .logo-uno { font-size: 2.2rem; }
-.logo-spicy {
-  display: block;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #F9A825;
-  letter-spacing: .15em;
-  text-transform: uppercase;
-  margin-top: -.3rem;
+
+@keyframes ember-glow {
+  0%, 100% {
+    filter: drop-shadow(2px 2px 0px #000) drop-shadow(-1px -1px 0px #000)
+      drop-shadow(0 0 6px rgba(255,109,0,.3));
+  }
+  50% {
+    filter: drop-shadow(2px 2px 0px #000) drop-shadow(-1px -1px 0px #000)
+      drop-shadow(0 0 18px rgba(255,171,0,.75)) drop-shadow(0 0 32px rgba(255,61,0,.35));
+  }
 }
 
 .auth-form, .name-field {
