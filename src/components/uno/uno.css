@@ -44,8 +44,6 @@
   text-align: center;
   line-height: 1;
 }
-.lobby-logo.small { margin-bottom: -.5rem; }
-
 .logo-spicy-row {
   display: flex;
   align-items: center;
@@ -53,13 +51,14 @@
   gap: .3rem;
   margin-bottom: .15rem;
 }
+.lobby-logo.small .logo-spicy-row { gap: .17rem; margin-bottom: .08rem; }
 
 .logo-chili {
   font-size: .9rem;
   display: inline-block;
   animation: chili-shake 3.5s ease-in-out infinite;
 }
-.lobby-logo.small .logo-chili { font-size: .7rem; }
+.lobby-logo.small .logo-chili { font-size: .5rem; }
 
 @keyframes chili-shake {
   0%, 72%, 100% { transform: rotate(0deg) scale(1); }
@@ -79,7 +78,7 @@
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
-.lobby-logo.small .logo-spicy { font-size: .55rem; letter-spacing: .2em; }
+.lobby-logo.small .logo-spicy { font-size: .4rem; }
 
 .logo-uno {
   display: block;
@@ -93,7 +92,10 @@
   -webkit-text-fill-color: transparent;
   animation: ember-glow 2.5s ease-in-out infinite;
 }
-.lobby-logo.small .logo-uno { font-size: 2.2rem; }
+.lobby-logo.small .logo-uno {
+  font-size: 2.2rem;
+  animation: ember-glow-small 2.5s ease-in-out infinite;
+}
 
 @keyframes ember-glow {
   0%, 100% {
@@ -103,6 +105,16 @@
   50% {
     filter: drop-shadow(2px 2px 0px #000) drop-shadow(-1px -1px 0px #000)
       drop-shadow(0 0 18px rgba(255,171,0,.75)) drop-shadow(0 0 32px rgba(255,61,0,.35));
+  }
+}
+@keyframes ember-glow-small {
+  0%, 100% {
+    filter: drop-shadow(1px 1px 0px #000) drop-shadow(-1px -1px 0px #000)
+      drop-shadow(0 0 3px rgba(255,109,0,.3));
+  }
+  50% {
+    filter: drop-shadow(1px 1px 0px #000) drop-shadow(-1px -1px 0px #000)
+      drop-shadow(0 0 10px rgba(255,171,0,.75)) drop-shadow(0 0 18px rgba(255,61,0,.35));
   }
 }
 

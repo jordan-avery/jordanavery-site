@@ -111,8 +111,11 @@ export default function Lobby({ socket, screen, playerName, roomState, mySocketI
     <div className="lobby-screen">
       <div className="lobby-card">
         <div className="lobby-logo">
+          <div className="logo-spicy-row">
+            <span className="logo-chili">🌶</span>
+            <span className="logo-spicy">S P I C Y</span>
+          </div>
           <span className="logo-uno">UNO</span>
-          <span className="logo-spicy">Spicy</span>
         </div>
 
         <div className="name-field">
