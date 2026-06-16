@@ -7,6 +7,8 @@ import ClvHistogram from './charts/ClvHistogram.jsx';
 import FeatureImportance from './charts/FeatureImportance.jsx';
 import SegmentDonut from './charts/SegmentDonut.jsx';
 import CustomerTable from './CustomerTable.jsx';
+import DecisionIntelligenceSection from './DecisionIntelligenceSection.jsx';
+import NBAPanel from './NBAPanel.jsx';
 
 const SEGMENT_BADGE = {
   high_potential: 'badge-green',
@@ -45,6 +47,8 @@ export default function Dashboard({ resultsOverride }) {
   const dashRef    = useRef(null);
   const [results, setResults] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const sessionToken = localStorage.getItem('clv_token');
 
   useEffect(() => {
     if (resultsOverride) {
@@ -170,10 +174,22 @@ export default function Dashboard({ resultsOverride }) {
           </Section>
         )}
 
-        {/* Customer table */}
+        {/* Customer table — click a row to open the NBA panel */}
         <Section title="Customer records (top 500 by CLV)">
-          <CustomerTable customers={customer_records} />
+          <div style={{ position: 'relative' }}>
+            <CustomerTable customers={customer_records} onRowClick={setSelectedCustomer} />
+            {selectedCustomer && (
+              <NBAPanel customer={selectedCustomer} onClose={() => setSelectedCustomer(null)} />
+            )}
+          </div>
         </Section>
+
+        {/* Decision Intelligence layer */}
+        <DecisionIntelligenceSection
+          results={results}
+          apiBase=""
+          sessionToken={sessionToken}
+        />
       </main>
     </div>
   );

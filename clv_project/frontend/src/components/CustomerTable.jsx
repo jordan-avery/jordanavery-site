@@ -16,7 +16,7 @@ const SEGMENT_LABEL = {
 
 const PAGE_SIZE = 25;
 
-export default function CustomerTable({ customers }) {
+export default function CustomerTable({ customers, onRowClick }) {
   const [filter, setFilter]   = useState('all');
   const [search, setSearch]   = useState('');
   const [page, setPage]       = useState(0);
@@ -89,7 +89,12 @@ export default function CustomerTable({ customers }) {
           </thead>
           <tbody>
             {pageRows.map((row, i) => (
-              <tr key={row.id ?? i} className="border-b border-neutral-800/50 hover:bg-neutral-800/30 transition-colors">
+              <tr
+                key={row.id ?? i}
+                onClick={() => onRowClick?.(row)}
+                style={{ cursor: onRowClick ? 'pointer' : 'default' }}
+                className="border-b border-neutral-800/50 hover:bg-neutral-800/30 transition-colors"
+              >
                 <td className="py-2 px-3 font-mono text-neutral-400 text-xs">{row.id}</td>
                 <td className="py-2 px-3">
                   <span className={SEGMENT_BADGE[row.segment] ?? 'badge-muted'}>

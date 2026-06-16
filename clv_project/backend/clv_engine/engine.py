@@ -480,6 +480,306 @@ def build_results(
 # Public entry point
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Decision Intelligence layer
+# ---------------------------------------------------------------------------
+
+_NBA_RULES: dict = {
+    "at_risk": [
+        {
+            "condition":   lambda r: float(r.get("p_alive") or 1) < 0.3,
+            "action":      "Immediate win-back — customer is likely churned",
+            "action_type": "winback",
+            "urgency":     "immediate",
+            "channel":     "email_or_phone",
+            "lift_factor": 0.60,
+            "why":         "P(alive) below 30% — reactivation window is closing fast.",
+            "confidence":  0.82,
+        },
+        {
+            "condition":   lambda r: 0.3 <= float(r.get("p_alive") or 1) < 0.6,
+            "action":      "Re-engagement email sequence (3-part)",
+            "action_type": "winback",
+            "urgency":     "this_week",
+            "channel":     "email",
+            "lift_factor": 0.35,
+            "why":         "Declining purchase rate detected — reactivation still economical.",
+            "confidence":  0.71,
+        },
+        {
+            "condition":   lambda r: True,
+            "action":      "Soft discount + testimonial email",
+            "action_type": "retention",
+            "urgency":     "this_month",
+            "channel":     "email",
+            "lift_factor": 0.20,
+            "why":         "Segment CLV at risk — low-cost retention touch maintains relationship.",
+            "confidence":  0.64,
+        },
+    ],
+    "high_potential": [
+        {
+            "condition":   lambda r: float(r.get("frequency") or 0) >= 4,
+            "action":      "VIP programme invitation",
+            "action_type": "growth",
+            "urgency":     "this_week",
+            "channel":     "email_or_phone",
+            "lift_factor": 0.25,
+            "why":         "High purchase frequency signals loyalty readiness for a premium tier.",
+            "confidence":  0.78,
+        },
+        {
+            "condition":   lambda r: True,
+            "action":      "Upsell to higher-value product tier",
+            "action_type": "upsell",
+            "urgency":     "this_month",
+            "channel":     "email",
+            "lift_factor": 0.18,
+            "why":         "Top-percentile CLV prediction — upsell conversion rate historically 2×.",
+            "confidence":  0.69,
+        },
+    ],
+    "loyal": [
+        {
+            "condition":   lambda r: True,
+            "action":      "Loyalty reward + cross-sell recommendation",
+            "action_type": "retention",
+            "urgency":     "this_month",
+            "channel":     "email",
+            "lift_factor": 0.12,
+            "why":         "Stable purchase pattern — reward reinforcement increases CLV by ~12%.",
+            "confidence":  0.73,
+        },
+    ],
+    "low_value": [
+        {
+            "condition":   lambda r: float(r.get("frequency") or 0) >= 2,
+            "action":      "Category recommendation email",
+            "action_type": "nurture",
+            "urgency":     "when_capacity_allows",
+            "channel":     "email",
+            "lift_factor": 0.08,
+            "why":         "Repeat purchaser — low-cost nudge can increase order frequency.",
+            "confidence":  0.45,
+        },
+    ],
+}
+
+
+def _nba_for_customer(record: dict, seg_avg_clv: dict) -> list:
+    segment = record.get("segment", "low_value")
+    clv = float(record.get("predicted_clv") or 0)
+    seg_above = {
+        "at_risk": "loyal", "low_value": "at_risk",
+        "loyal": "high_potential", "high_potential": "high_potential",
+    }.get(segment, segment)
+    clv_delta = max(float(seg_avg_clv.get(seg_above) or clv) - clv, 0)
+
+    actions = []
+    for rule in _NBA_RULES.get(segment, _NBA_RULES["low_value"]):
+        if rule["condition"](record):
+            base = clv_delta if clv_delta > 0 else clv
+            lift = max(round(base * rule["lift_factor"], 0), 10.0)
+            actions.append({
+                "action":             rule["action"],
+                "action_type":        rule["action_type"],
+                "urgency":            rule["urgency"],
+                "channel":            rule["channel"],
+                "estimated_clv_lift": lift,
+                "why":                rule["why"],
+                "confidence":         rule["confidence"],
+            })
+            if len(actions) == 2:
+                break
+    return actions
+
+
+def _build_intervention_queue(customer_records: list, seg_avg_clv: dict) -> tuple:
+    at_risk = sorted(
+        [r for r in customer_records if r.get("segment") == "at_risk"],
+        key=lambda r: float(r.get("predicted_clv") or 0), reverse=True,
+    )
+    hp = sorted(
+        [r for r in customer_records if r.get("segment") == "high_potential"],
+        key=lambda r: float(r.get("predicted_clv") or 0), reverse=True,
+    )
+
+    queue, rank = [], 1
+
+    for r in at_risk[:5]:
+        clv = float(r.get("predicted_clv") or 0)
+        p   = float(r.get("p_alive") or 0.5)
+        urgency = "immediate" if p < 0.3 else "this_week"
+        queue.append({
+            "rank":                rank,
+            "intervention_type":   "individual",
+            "customer_id":         r.get("id", f"cust_{rank}"),
+            "segment":             "at_risk",
+            "target_segment":      "loyal",
+            "urgency":             urgency,
+            "signal_summary":      f"P(alive) {round(p * 100)}% · {int(r.get('frequency') or 1)} purchases · activity declining",
+            "recommended_action":  "Personalised win-back email + 10% offer",
+            "channel":             "email_or_phone" if urgency == "immediate" else "email",
+            "expected_clv_gain":   round(clv * 0.35, 0),
+            "urgency_window_days": 7 if urgency == "immediate" else 14,
+        })
+        rank += 1
+
+    for r in hp[:3]:
+        clv  = float(r.get("predicted_clv") or 0)
+        freq = int(r.get("frequency") or 1)
+        queue.append({
+            "rank":                rank,
+            "intervention_type":   "individual",
+            "customer_id":         r.get("id", f"cust_{rank}"),
+            "segment":             "high_potential",
+            "target_segment":      "high_potential",
+            "urgency":             "this_week",
+            "signal_summary":      f"{freq} purchases · strong engagement signals · upsell-ready",
+            "recommended_action":  "VIP programme personal invite",
+            "channel":             "email_or_phone",
+            "expected_clv_gain":   round(clv * 0.22, 0),
+            "urgency_window_days": 14,
+        })
+        rank += 1
+
+    seg_counts: dict = {}
+    for r in customer_records:
+        s = r.get("segment", "low_value")
+        seg_counts[s] = seg_counts.get(s, 0) + 1
+
+    at_risk_n = seg_counts.get("at_risk", 0)
+    if at_risk_n > 10:
+        queue.append({
+            "rank":               rank,
+            "intervention_type":  "batch",
+            "segment":            "at_risk",
+            "target_segment":     "loyal",
+            "urgency":            "this_week",
+            "cohort_size":        at_risk_n,
+            "signal_summary":     f"{at_risk_n:,} at-risk customers · 30-day re-engagement window",
+            "recommended_action": "3-email win-back sequence with segment-specific offers",
+            "channel":            "email",
+            "total_expected_gain": round(float(seg_avg_clv.get("at_risk") or 100) * at_risk_n * 0.15, 0),
+        })
+        rank += 1
+
+    loyal_n = seg_counts.get("loyal", 0)
+    if loyal_n > 10:
+        queue.append({
+            "rank":               rank,
+            "intervention_type":  "batch",
+            "segment":            "loyal",
+            "target_segment":     "high_potential",
+            "urgency":            "this_month",
+            "cohort_size":        loyal_n,
+            "signal_summary":     f"{loyal_n:,} loyal customers · consistent cadence · upsell-ready",
+            "recommended_action": "Cross-sell + loyalty tier upgrade campaign",
+            "channel":            "email",
+            "total_expected_gain": round(float(seg_avg_clv.get("loyal") or 200) * loyal_n * 0.08, 0),
+        })
+
+    summary = {
+        "immediate_count":     sum(1 for q in queue if q.get("urgency") == "immediate"),
+        "this_week_count":     sum(1 for q in queue if q.get("urgency") == "this_week"),
+        "individual_count":    sum(1 for q in queue if q.get("intervention_type") == "individual"),
+        "total_expected_gain": sum(
+            q.get("expected_clv_gain") or q.get("total_expected_gain") or 0
+            for q in queue
+        ),
+    }
+    return queue, summary
+
+
+def _build_uplift_config(segments: list) -> dict:
+    counts      = {s["segment"]: s["count"]   for s in segments}
+    seg_avg_clv = {s["segment"]: s["avg_clv"] for s in segments}
+    return {
+        "movements": [
+            {
+                "id": "ar_to_loyal", "label": "At risk → Loyal",
+                "description": "Win-back / retention campaign",
+                "n": counts.get("at_risk", 0), "default_rate": 0.15,
+            },
+            {
+                "id": "loyal_to_hp", "label": "Loyal → High Potential",
+                "description": "Upsell / VIP upgrade",
+                "n": counts.get("loyal", 0), "default_rate": 0.08,
+            },
+            {
+                "id": "lv_to_ar", "label": "Low Value → At Risk",
+                "description": "Re-engagement campaign",
+                "n": counts.get("low_value", 0), "default_rate": 0.10,
+            },
+        ],
+        "segment_avg_clv": seg_avg_clv,
+        "segment_counts":  counts,
+        "default_cost":    40,
+    }
+
+
+def _build_optimizer_config() -> dict:
+    return {
+        "default_budget": 30000,
+        "budget_range":   [1000, 200000],
+        "focus_segments": ["high_potential", "loyal", "at_risk"],
+        "channel_caps": {
+            "email_owned":        0.25,
+            "paid_search":        0.40,
+            "paid_social_meta":   0.30,
+            "display_dv360":      0.20,
+            "paid_social_tiktok": 0.15,
+        },
+        "default_clv_cac": {
+            "email_owned":        45.2,
+            "paid_search":        18.7,
+            "paid_social_meta":   12.4,
+            "display_dv360":       8.1,
+            "paid_social_tiktok":  6.3,
+        },
+    }
+
+
+def run_clv_pipeline_with_di(
+    data_sources: DataSources,
+    time_horizon_months: int = 12,
+    margin: float = 0.30,
+    observation_end: Optional[str] = None,
+) -> dict:
+    """Full pipeline + Decision Intelligence layer (NBA, intervention queue, simulators)."""
+    results = run_clv_pipeline(
+        data_sources,
+        time_horizon_months=time_horizon_months,
+        margin=margin,
+        observation_end=observation_end,
+    )
+
+    seg_avg_clv = {s["segment"]: s["avg_clv"] for s in results["segments"]}
+
+    records_with_nba = []
+    for rec in results["customer_records"]:
+        rec = dict(rec)
+        rec["avg_aov"] = rec.get("expected_aov")
+        rec["revenue"] = rec.get("total_revenue")
+        rec["nba_actions"] = _nba_for_customer(rec, seg_avg_clv)
+        records_with_nba.append(rec)
+    results["customer_records"] = records_with_nba
+
+    queue, queue_summary = _build_intervention_queue(records_with_nba, seg_avg_clv)
+    results["intervention_queue"]         = queue
+    results["intervention_queue_summary"] = queue_summary
+    results["uplift_config"]              = _build_uplift_config(results["segments"])
+    results["uplift_default"]             = None
+    results["optimizer_config"]           = _build_optimizer_config()
+
+    print("[DI Layer] Done.")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Public entry point — CLV only (no DI)
+# ---------------------------------------------------------------------------
+
 def run_clv_pipeline(
     data_sources: DataSources,
     time_horizon_months: int = 12,

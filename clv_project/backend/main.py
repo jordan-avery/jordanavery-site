@@ -57,7 +57,7 @@ def _json_bytes(data) -> bytes:
     return json.dumps(_json_safe(data), ensure_ascii=False).encode("utf-8")
 
 import auth
-from clv_engine.engine import DataSources, run_clv_pipeline
+from clv_engine.engine import DataSources, run_clv_pipeline_with_di
 from clv_engine.schemas import ValidationError, get_schema_info, validate_and_clean
 from clv_engine.synthetic_data import generate_all
 
@@ -71,7 +71,7 @@ _demo_cache: Optional[dict] = None
 def _build_demo_cache() -> dict:
     crm, ga4, media, profiles = generate_all(output_dir="/tmp/clv_synthetic")
     sources = DataSources(crm=crm, ga4=ga4, media_spend=media, customer_profiles=profiles)
-    return run_clv_pipeline(sources)
+    return run_clv_pipeline_with_di(sources)
 
 
 @asynccontextmanager
@@ -236,7 +236,7 @@ async def run_analysis(authorization: str = Header(None)):
             setattr(sources, attr, pd.read_csv(path))
 
     loop = asyncio.get_event_loop()
-    results = await loop.run_in_executor(None, lambda: run_clv_pipeline(sources))
+    results = await loop.run_in_executor(None, lambda: run_clv_pipeline_with_di(sources))
     return Response(content=_json_bytes(results), media_type="application/json")
 
 
