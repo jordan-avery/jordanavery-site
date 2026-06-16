@@ -1,0 +1,8 @@
+{
+  "_example@example.com": {
+    "code": "EXAMPLE",
+    "name": "Example User",
+    "company": "Example Corp",
+    "expires": "2024-01-01T00:00:00"
+  }
+}

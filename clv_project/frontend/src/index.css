@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    @apply bg-neutral-950 text-neutral-100 font-sans antialiased;
+    min-height: 100dvh;
+  }
+}
+
+@layer components {
+  .kpi-card {
+    @apply bg-neutral-900 border border-neutral-800 rounded-xl p-5;
+  }
+  .kpi-value {
+    @apply text-3xl font-semibold tracking-tight text-white;
+  }
+  .kpi-label {
+    @apply text-xs uppercase tracking-widest text-neutral-500 mt-1;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-brand-green text-white hover:bg-emerald-600;
+  }
+  .btn-secondary {
+    @apply btn bg-neutral-800 text-neutral-200 hover:bg-neutral-700 border border-neutral-700;
+  }
+  .btn-ghost {
+    @apply btn text-neutral-400 hover:text-white hover:bg-neutral-800;
+  }
+
+  .input {
+    @apply w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green transition-colors;
+  }
+
+  .card {
+    @apply bg-neutral-900 border border-neutral-800 rounded-xl;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+  .badge-green  { @apply badge bg-emerald-900/50 text-emerald-400; }
+  .badge-blue   { @apply badge bg-blue-900/50   text-blue-400; }
+  .badge-amber  { @apply badge bg-amber-900/50  text-amber-400; }
+  .badge-muted  { @apply badge bg-neutral-800   text-neutral-400; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #404040; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #525252; }
+
+/* Print styles for PDF export */
+@media print {
+  body { background: white; color: black; }
+  .no-print { display: none !important; }
+  .card { border: 1px solid #e5e7eb; }
+}
