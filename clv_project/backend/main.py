@@ -48,7 +48,14 @@ def _build_demo_cache() -> dict:
 async def lifespan(app: FastAPI):
     global _demo_cache
     loop = asyncio.get_event_loop()
-    _demo_cache = await loop.run_in_executor(None, _build_demo_cache)
+    try:
+        _demo_cache = await loop.run_in_executor(None, _build_demo_cache)
+        print("[Startup] Demo cache ready.")
+    except Exception as exc:
+        import traceback
+        print("[Startup] FAILED to build demo cache:")
+        traceback.print_exc()
+        # Server still starts — /api/demo returns 503 until cache is populated
     yield
 
 

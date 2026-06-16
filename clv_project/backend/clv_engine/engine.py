@@ -102,13 +102,16 @@ def build_rfm(crm: pd.DataFrame, observation_end: Optional[str] = None) -> pd.Da
     agg["recency"]   = (agg["last_purchase"] - agg["first_purchase"]).dt.days / 7
     agg["frequency"] = (agg["n_transactions"] - 1).clip(lower=0)
 
-    # Monetary value for Gamma-Gamma: use repeat purchases only
+    # Monetary value for Gamma-Gamma: mean of repeat (non-first) purchases per customer.
+    # cumcount avoids groupby.apply, which changed behaviour in pandas 2.2+.
+    crm_sorted = crm.sort_values(["customer_id", "transaction_date"]).copy()
+    crm_sorted["_txn_rank"] = crm_sorted.groupby("customer_id").cumcount()
     repeat_txns = (
-        crm.sort_values("transaction_date")
-        .groupby("customer_id")
-        .apply(lambda g: g.iloc[1:]["order_value"].mean() if len(g) > 1 else np.nan)
+        crm_sorted[crm_sorted["_txn_rank"] > 0]
+        .groupby("customer_id")["order_value"]
+        .mean()
         .reset_index()
-        .rename(columns={0: "monetary_value"})
+        .rename(columns={"order_value": "monetary_value"})
     )
     agg = agg.merge(repeat_txns, on="customer_id", how="left")
     agg["monetary_value"] = agg["monetary_value"].fillna(agg["mean_order_value"])
