@@ -33,10 +33,12 @@ function KpiCard({ label, value, sub }) {
   );
 }
 
-function Section({ title, children }) {
+function Section({ title, description, children }) {
   return (
     <section className="card p-6">
-      <h2 className="text-sm font-medium text-neutral-400 uppercase tracking-widest mb-5">{title}</h2>
+      <h2 className="text-sm font-medium text-neutral-400 uppercase tracking-widest mb-2">{title}</h2>
+      {description && <p className="text-neutral-500 text-xs mb-5 leading-relaxed max-w-3xl">{description}</p>}
+      {!description && <div className="mb-5" />}
       {children}
     </section>
   );
@@ -125,10 +127,16 @@ export default function Dashboard({ resultsOverride }) {
 
         {/* Segments + Donut */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Section title="Customer segments">
+          <Section
+            title="Customer segments"
+            description="BG/NBD model groups customers by purchase recency, frequency, and predicted survival probability. Segments drive the recommended actions in the Decision Intelligence layer below."
+          >
             <SegmentDonut segments={segments} />
           </Section>
-          <Section title="Segment detail">
+          <Section
+            title="Segment detail"
+            description="Average CLV, AOV, and P(alive) per segment. P(alive) is the model's estimate that the customer is still an active buyer — below 30% is a strong churn signal."
+          >
             <div className="space-y-3">
               {segments.map((seg) => (
                 <div key={seg.segment} className="flex items-start gap-3 p-3 rounded-lg bg-neutral-800/40">
@@ -151,31 +159,43 @@ export default function Dashboard({ resultsOverride }) {
 
         {/* Distribution + Feature importance */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Section title="CLV distribution">
+          <Section
+            title="CLV distribution"
+            description="Histogram of predicted 12-month CLV across your customer base. A long right tail means a small cohort of customers drives a disproportionate share of revenue — concentrate retention spend there."
+          >
             <ClvHistogram distribution={clv_distribution} />
           </Section>
-          <Section title="Feature importance">
+          <Section
+            title="Feature importance"
+            description="Which signals drive the Gamma-Gamma CLV prediction most. High recency weight means recent buyers are reliably more valuable; high frequency weight means repeat-purchase cadence is the dominant predictor."
+          >
             <FeatureImportance features={feature_importance} />
           </Section>
         </div>
 
         {/* Channel CLV */}
-        <Section title="Avg predicted CLV by acquisition channel">
+        <Section
+          title="Avg predicted CLV by acquisition channel"
+          description="Lifetime value segmented by the channel that originally acquired the customer. Use this alongside CAC data to identify which channels are acquiring your highest-quality buyers, not just the most."
+        >
           <ChannelClv channelClv={channel_clv} />
         </Section>
 
         {/* CLV:CAC matrix — only shown when media_spend was uploaded */}
         {clv_cac_matrix && (
-          <Section title="CLV:CAC ratio by segment × channel">
-            <p className="text-neutral-500 text-xs mb-4">
-              Ratio &gt; 3× is healthy. &lt; 1× means you're acquiring at a loss relative to predicted value.
-            </p>
+          <Section
+            title="CLV:CAC ratio by segment × channel"
+            description="Ratio > 3× is healthy. < 1× means you're acquiring customers at a loss relative to their predicted lifetime value. Use this matrix to reallocate budget toward high-ratio channel–segment combinations."
+          >
             <ClvCacMatrix matrix={clv_cac_matrix} />
           </Section>
         )}
 
         {/* Customer table — click a row to open the NBA panel */}
-        <Section title="Customer records (top 500 by CLV)">
+        <Section
+          title="Customer records (top 500 by CLV)"
+          description="Individual-level predictions sorted by predicted CLV. Click any row to see that customer's Next Best Actions — personalised recommendations derived from their segment, recency, and purchase history."
+        >
           <div style={{ position: 'relative' }}>
             <CustomerTable customers={customer_records} onRowClick={setSelectedCustomer} />
             {selectedCustomer && (

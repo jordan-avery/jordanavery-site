@@ -694,22 +694,32 @@ def _build_intervention_queue(customer_records: list, seg_avg_clv: dict) -> tupl
 def _build_uplift_config(segments: list) -> dict:
     counts      = {s["segment"]: s["count"]   for s in segments}
     seg_avg_clv = {s["segment"]: s["avg_clv"] for s in segments}
+
+    def _delta(from_seg: str, to_seg: str) -> float:
+        return round(seg_avg_clv.get(to_seg, 0) - seg_avg_clv.get(from_seg, 0), 0)
+
     return {
         "movements": [
             {
-                "id": "ar_to_loyal", "label": "At risk → Loyal",
+                "id": "ar_to_loyal", "label": "At Risk → Loyal",
+                "from": "at_risk", "to": "loyal",
                 "description": "Win-back / retention campaign",
                 "n": counts.get("at_risk", 0), "default_rate": 0.15,
+                "clv_delta": _delta("at_risk", "loyal"),
             },
             {
                 "id": "loyal_to_hp", "label": "Loyal → High Potential",
+                "from": "loyal", "to": "high_potential",
                 "description": "Upsell / VIP upgrade",
                 "n": counts.get("loyal", 0), "default_rate": 0.08,
+                "clv_delta": _delta("loyal", "high_potential"),
             },
             {
                 "id": "lv_to_ar", "label": "Low Value → At Risk",
+                "from": "low_value", "to": "at_risk",
                 "description": "Re-engagement campaign",
                 "n": counts.get("low_value", 0), "default_rate": 0.10,
+                "clv_delta": _delta("low_value", "at_risk"),
             },
         ],
         "segment_avg_clv": seg_avg_clv,
