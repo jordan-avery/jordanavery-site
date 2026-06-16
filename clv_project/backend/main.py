@@ -14,6 +14,7 @@ Static frontend is served from ./frontend/dist when it exists.
 
 import asyncio
 import io
+import json
 import math
 import os
 from contextlib import asynccontextmanager
@@ -24,20 +25,36 @@ import httpx
 import pandas as pd
 from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.responses import Response
 
 
 def _json_safe(obj):
-    """Recursively replace NaN/Inf with None — Python 3.14 raises ValueError on them."""
-    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
-        return None
+    """Recursively sanitize for Python 3.14 strict JSON encoding.
+
+    Handles both Python float NaN/Inf and numpy scalar NaN/Inf (numpy 2.x
+    no longer makes numpy.float64 a subclass of float, so isinstance checks
+    alone are not enough).
+    """
     if isinstance(obj, dict):
         return {k: _json_safe(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_json_safe(item) for item in obj]
+    # Convert numpy scalars to Python natives first (numpy 2.x compatibility)
+    if hasattr(obj, "item"):
+        try:
+            obj = obj.item()
+        except (ValueError, AttributeError):
+            pass
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
     return obj
+
+
+def _json_bytes(data) -> bytes:
+    """Sanitize and serialize to UTF-8 JSON bytes, bypassing FastAPI's serializer."""
+    return json.dumps(_json_safe(data), ensure_ascii=False).encode("utf-8")
 
 import auth
 from clv_engine.engine import DataSources, run_clv_pipeline
@@ -114,7 +131,7 @@ class OTPVerify(BaseModel):
 async def get_demo():
     if _demo_cache is None:
         raise HTTPException(status_code=503, detail="Demo data is still loading. Try again in a moment.")
-    return JSONResponse(content=_json_safe(_demo_cache))
+    return Response(content=_json_bytes(_demo_cache), media_type="application/json")
 
 
 @app.post("/api/auth/request")
@@ -220,7 +237,7 @@ async def run_analysis(authorization: str = Header(None)):
 
     loop = asyncio.get_event_loop()
     results = await loop.run_in_executor(None, lambda: run_clv_pipeline(sources))
-    return JSONResponse(content=_json_safe(results))
+    return Response(content=_json_bytes(results), media_type="application/json")
 
 
 # ---------------------------------------------------------------------------
