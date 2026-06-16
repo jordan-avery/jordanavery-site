@@ -14,6 +14,7 @@ Static frontend is served from ./frontend/dist when it exists.
 
 import asyncio
 import io
+import math
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -23,8 +24,20 @@ import httpx
 import pandas as pd
 from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+
+def _json_safe(obj):
+    """Recursively replace NaN/Inf with None — Python 3.14 raises ValueError on them."""
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_json_safe(item) for item in obj]
+    return obj
 
 import auth
 from clv_engine.engine import DataSources, run_clv_pipeline
@@ -101,7 +114,7 @@ class OTPVerify(BaseModel):
 async def get_demo():
     if _demo_cache is None:
         raise HTTPException(status_code=503, detail="Demo data is still loading. Try again in a moment.")
-    return _demo_cache
+    return JSONResponse(content=_json_safe(_demo_cache))
 
 
 @app.post("/api/auth/request")
@@ -207,7 +220,7 @@ async def run_analysis(authorization: str = Header(None)):
 
     loop = asyncio.get_event_loop()
     results = await loop.run_in_executor(None, lambda: run_clv_pipeline(sources))
-    return results
+    return JSONResponse(content=_json_safe(results))
 
 
 # ---------------------------------------------------------------------------

@@ -438,12 +438,18 @@ def build_results(
         .to_dict(orient="records")
     )
 
-    bins = np.percentile(rfm["predicted_clv"], np.linspace(0, 100, 21))
-    hist, edges = np.histogram(rfm["predicted_clv"], bins=bins)
-    clv_distribution = [
-        {"bin_start": round(float(edges[i]), 0), "count": int(hist[i])}
-        for i in range(len(hist))
-    ]
+    # Drop NaN/Inf before building the histogram — percentile on NaN produces NaN
+    # edges, which Python 3.14's strict JSON encoder rejects.
+    clv_valid = rfm["predicted_clv"].replace([np.inf, -np.inf], np.nan).dropna()
+    bins = np.unique(np.percentile(clv_valid, np.linspace(0, 100, 21)))
+    if len(bins) > 1:
+        hist, edges = np.histogram(clv_valid, bins=bins)
+        clv_distribution = [
+            {"bin_start": round(float(edges[i]), 0), "count": int(hist[i])}
+            for i in range(len(hist))
+        ]
+    else:
+        clv_distribution = []
 
     channel_clv = (
         rfm.groupby("acquisition_channel")
