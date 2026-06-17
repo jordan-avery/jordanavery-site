@@ -60,10 +60,14 @@ def generate_crm(
     end   = datetime.strptime(end_date,   "%Y-%m-%d")
     span  = (end - start).days
 
-    group_probs    = [0.15, 0.30, 0.30, 0.25]
-    group_freq_mu  = [8.0,  4.0,  1.8,  0.7]
-    group_aov_mu   = [280,  160,  140,  90]
-    group_aov_std  = [80,   50,   45,   30]
+    group_probs         = [0.15, 0.30, 0.30, 0.25]
+    group_freq_mu       = [8.0,  4.0,  1.8,  0.7]
+    group_aov_mu        = [280,  160,  140,  90]
+    group_aov_std       = [80,   50,   45,   30]
+    # Mean customer lifetime in years per group (exponential distribution).
+    # High-value customers stay much longer; low-value churn quickly.
+    # This gives the BG/NBD model real dropout signal so p_alive varies by segment.
+    group_lifetime_mean = [6.0,  3.5,  1.6,  0.9]
 
     rows = []
     cid_pad = len(str(n_customers))
@@ -81,12 +85,18 @@ def generate_crm(
             p=[0.25, 0.20, 0.20, 0.25, 0.10]
         )
 
-        years_active = max((end - acq_date).days / 365, 0.05)
+        # Customer lifetime — how long they remain an active buyer.
+        # Transactions are generated only within [acq_date, churn_date ∩ end_date].
+        lifetime_days = int(np.random.exponential(group_lifetime_mean[group] * 365))
+        churn_date    = acq_date + timedelta(days=max(1, lifetime_days))
+        active_end    = min(end, churn_date)
+
+        years_active = max((active_end - acq_date).days / 365, 0.05)
         lam = group_freq_mu[group] * years_active
         n_txns = max(1, np.random.poisson(lam))
 
         txn_offsets = sorted(
-            np.random.uniform(0, (end - acq_date).days, n_txns).astype(int)
+            np.random.uniform(0, (active_end - acq_date).days, n_txns).astype(int)
         )
 
         for offset in txn_offsets:
