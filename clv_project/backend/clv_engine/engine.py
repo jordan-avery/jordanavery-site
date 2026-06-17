@@ -441,9 +441,13 @@ def build_results(
     # Drop NaN/Inf before building the histogram — percentile on NaN produces NaN
     # edges, which Python 3.14's strict JSON encoder rejects.
     clv_valid = rfm["predicted_clv"].replace([np.inf, -np.inf], np.nan).dropna()
-    bins = np.unique(np.percentile(clv_valid, np.linspace(0, 100, 21)))
-    if len(bins) > 1:
-        hist, edges = np.histogram(clv_valid, bins=bins)
+    if len(clv_valid) > 1:
+        # Equal-width bins capped at the 99th percentile so the right-skewed shape
+        # is visible. Percentile bins (equal-frequency) produce identical bar heights.
+        # Values above p99 are clipped into the last bin rather than excluded.
+        p99  = float(np.percentile(clv_valid, 99))
+        bins = np.linspace(0, max(p99, 1.0), 21)
+        hist, edges = np.histogram(clv_valid.clip(upper=p99), bins=bins)
         clv_distribution = [
             {"bin_start": round(float(edges[i]), 0), "count": int(hist[i])}
             for i in range(len(hist))
