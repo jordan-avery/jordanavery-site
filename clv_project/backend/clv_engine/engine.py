@@ -464,6 +464,77 @@ def build_results(
         .to_dict(orient="records")
     )
 
+    # --- Phase 1 additions ---------------------------------------------------
+
+    # Monthly revenue + orders trend
+    crm_ts = data_sources.crm.copy()
+    crm_ts["transaction_date"] = pd.to_datetime(crm_ts["transaction_date"])
+    crm_ts["month"] = crm_ts["transaction_date"].dt.to_period("M").astype(str)
+    monthly = (
+        crm_ts.groupby("month")
+        .agg(revenue=("order_value", "sum"), orders=("order_value", "count"),
+             avg_order_value=("order_value", "mean"))
+        .reset_index().sort_values("month")
+    )
+    monthly_trend = monthly.assign(
+        revenue=lambda d: d.revenue.round(2),
+        avg_order_value=lambda d: d.avg_order_value.round(2),
+    ).to_dict(orient="records")
+
+    # Within-segment CLV distribution (box-plot data)
+    segment_clv_distribution = []
+    for seg_name in ["high_potential", "loyal", "at_risk", "low_value"]:
+        sub = rfm[rfm["segment"] == seg_name]["predicted_clv"]
+        if len(sub) == 0:
+            continue
+        segment_clv_distribution.append({
+            "segment": seg_name,
+            "min":    round(float(sub.min()), 0),
+            "p25":    round(float(sub.quantile(0.25)), 0),
+            "median": round(float(sub.median()), 0),
+            "p75":    round(float(sub.quantile(0.75)), 0),
+            "max":    round(float(sub.max()), 0),
+            "mean":   round(float(sub.mean()), 0),
+        })
+
+    # Tenure vs CLV scatter (300 sample)
+    rfm["tenure_months"] = (rfm["T"] / 4.33).round(1)
+    scatter_sample = (
+        rfm[["predicted_clv", "tenure_months", "segment", "frequency"]]
+        .sample(min(300, len(rfm)), random_state=42)
+        .round({"predicted_clv": 0, "tenure_months": 1})
+        .reset_index()
+        .rename(columns={"customer_id": "id"})
+        .to_dict(orient="records")
+    )
+
+    # Concentration KPIs
+    total_clv = rfm["predicted_clv"].sum()
+    kpis["top_50_clv_pct"]  = round(rfm.nlargest(50,  "predicted_clv")["predicted_clv"].sum() / total_clv * 100, 1)
+    kpis["top_100_clv_pct"] = round(rfm.nlargest(100, "predicted_clv")["predicted_clv"].sum() / total_clv * 100, 1)
+
+    # Extended channel metrics: CVR, CAC, ROAS — requires media_spend
+    channel_metrics = None
+    if data_sources.media_spend is not None:
+        ms = data_sources.media_spend
+        ch_agg = (
+            ms.groupby("channel")
+            .agg(total_spend=("spend_usd", "sum"),
+                 total_conversions=("attributed_conversions", "sum"),
+                 total_clicks=("clicks", "sum"),
+                 total_revenue=("attributed_revenue", "sum"))
+            .reset_index()
+        )
+        ch_agg["cac"]   = (ch_agg["total_spend"] / ch_agg["total_conversions"].replace(0, np.nan)).round(2)
+        ch_agg["cvr"]   = (ch_agg["total_conversions"] / ch_agg["total_clicks"].replace(0, np.nan)).round(4)
+        ch_agg["roas"]  = (ch_agg["total_revenue"] / ch_agg["total_spend"].replace(0, np.nan)).round(2)
+        ch_clv_map      = {r["acquisition_channel"]: r["avg_clv"] for r in channel_clv}
+        ch_agg["avg_clv"]       = ch_agg["channel"].map(ch_clv_map).fillna(0).round(0)
+        ch_agg["clv_cac_ratio"] = (ch_agg["avg_clv"] / ch_agg["cac"].replace(0, np.nan)).round(2)
+        channel_metrics = ch_agg.sort_values("clv_cac_ratio", ascending=False).to_dict(orient="records")
+
+    # -------------------------------------------------------------------------
+
     result = {
         "kpis":               kpis,
         "segments":           segments,
@@ -472,6 +543,15 @@ def build_results(
         "feature_importance": compute_feature_importance(rfm),
         "customer_records":   customer_records,
         "clv_cac_matrix":     None,
+        "intervention_queue":         None,
+        "intervention_queue_summary": None,
+        "uplift_config":              None,
+        "uplift_default":             None,
+        "optimizer_config":           None,
+        "monthly_trend":            monthly_trend,
+        "segment_clv_distribution": segment_clv_distribution,
+        "tenure_clv_scatter":       scatter_sample,
+        "channel_metrics":          channel_metrics,
     }
 
     if data_sources.media_spend is not None:

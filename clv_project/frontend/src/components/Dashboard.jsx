@@ -7,6 +7,11 @@ import ClvHistogram from './charts/ClvHistogram.jsx';
 import FeatureImportance from './charts/FeatureImportance.jsx';
 import SegmentDonut from './charts/SegmentDonut.jsx';
 import CustomerTable from './CustomerTable.jsx';
+import RevenueOrdersTrend from './charts/RevenueOrdersTrend.jsx';
+import SegmentClvDistribution from './charts/SegmentClvDistribution.jsx';
+import TenureClvScatter from './charts/TenureClvScatter.jsx';
+import ChannelMetricsTable from './charts/ChannelMetricsTable.jsx';
+import ChannelBubbleChart from './charts/ChannelBubbleChart.jsx';
 import DecisionIntelligenceSection from './DecisionIntelligenceSection.jsx';
 import NBAPanel from './NBAPanel.jsx';
 
@@ -85,7 +90,11 @@ export default function Dashboard({ resultsOverride }) {
     );
   }
 
-  const { kpis, segments, clv_distribution, channel_clv, feature_importance, customer_records, clv_cac_matrix } = results;
+  const {
+    kpis, segments, clv_distribution, channel_clv, feature_importance,
+    customer_records, clv_cac_matrix, monthly_trend, segment_clv_distribution,
+    tenure_clv_scatter, channel_metrics,
+  } = results;
 
   return (
     <div className="min-h-dvh flex flex-col">
@@ -117,25 +126,42 @@ export default function Dashboard({ resultsOverride }) {
           </p>
         </div>
 
+        {/* Business context */}
+        {monthly_trend?.length > 0 && (
+          <Section
+            title="Revenue & order trends"
+            description="Monthly revenue (bars), order volume (solid line), and average order value (dashed line). AOV is shown as a 3-month rolling average to smooth noise. Review this before interpreting CLV scores — a declining revenue trend makes at-risk recovery more urgent; a rising AOV trend validates forward CLV projections."
+          >
+            <RevenueOrdersTrend monthlyTrend={monthly_trend} />
+          </Section>
+        )}
+
         {/* KPIs */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <KpiCard label="Avg predicted CLV" value={`$${kpis.avg_predicted_clv.toLocaleString()}`} sub={`Median $${kpis.median_predicted_clv.toLocaleString()}`} />
           <KpiCard label="High-potential customers" value={kpis.high_potential_count.toLocaleString()} sub={`${kpis.high_potential_pct}% of base`} />
           <KpiCard label="At-risk revenue" value={`$${kpis.at_risk_revenue.toLocaleString()}`} sub="Predicted CLV at risk" />
           <KpiCard label="Total customers" value={kpis.total_customers.toLocaleString()} sub={`${kpis.data_sources_used.length} source${kpis.data_sources_used.length > 1 ? 's' : ''} used`} />
+          {kpis.top_50_clv_pct != null && (
+            <KpiCard
+              label="CLV concentration — top 50"
+              value={`${kpis.top_50_clv_pct}%`}
+              sub={`Top 100 = ${kpis.top_100_clv_pct}% of total predicted CLV`}
+            />
+          )}
         </div>
 
         {/* Segments + Donut */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Section
             title="Customer segments"
-            description="BG/NBD model groups customers by purchase recency, frequency, and predicted survival probability. Segments drive the recommended actions in the Decision Intelligence layer below."
+            description="Each customer is scored using a BG/NBD model that estimates future purchase frequency and expected order value, then placed into one of four tiers based on predicted 12-month CLV. Use this to understand the shape of your base — how much value is concentrated at the top, and how large each actionable group is."
           >
             <SegmentDonut segments={segments} />
           </Section>
           <Section
             title="Segment detail"
-            description="Average CLV, AOV, and P(alive) per segment. P(alive) is the model's estimate that the customer is still an active buyer — below 30% is a strong churn signal."
+            description="Each tier has a distinct recommended response. High Potential customers warrant proactive, high-touch investment. At Risk customers need a win-back play before their P(alive) drops too far. Low Value customers should be handled with low-cost automation only — direct rep time will cost more than they return."
           >
             <div className="space-y-3">
               {segments.map((seg) => (
@@ -157,17 +183,40 @@ export default function Dashboard({ resultsOverride }) {
           </Section>
         </div>
 
+        {/* Segment CLV distribution + tenure scatter */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {segment_clv_distribution?.length > 0 && (
+            <Section
+              title="CLV distribution within segments"
+              description="Shows the spread of predicted CLV inside each segment — not just the average. The box spans the 25th–75th percentile; the dot is the mean; whiskers show min and max. Customers near the segment maximum are approaching their ceiling. Customers well below it have runway to grow."
+            >
+              <SegmentClvDistribution
+                segmentClvDistribution={segment_clv_distribution}
+                segments={segments}
+              />
+            </Section>
+          )}
+          {tenure_clv_scatter?.length > 0 && (
+            <Section
+              title="Tenure vs. predicted CLV"
+              description="Each dot is a customer. X-axis = how long they've been a customer; Y-axis = predicted CLV; dot size = purchase frequency. Short tenure + high CLV = high runway, invest now. Long tenure + high CLV = likely saturated, focus on retention. Long tenure + low CLV = stuck, low intervention ROI."
+            >
+              <TenureClvScatter scatter={tenure_clv_scatter} />
+            </Section>
+          )}
+        </div>
+
         {/* Distribution + Feature importance */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Section
             title="CLV distribution"
-            description="Histogram of predicted 12-month CLV across your customer base. A long right tail means a small cohort of customers drives a disproportionate share of revenue — concentrate retention spend there."
+            description="Shows how predicted CLV is spread across your customer base. A healthy distribution has a long right tail — a small group of high-value customers driving disproportionate revenue. Heavy concentration at the low end suggests an acquisition mix problem or high early churn."
           >
             <ClvHistogram distribution={clv_distribution} />
           </Section>
           <Section
             title="Feature importance"
-            description="Which signals drive the Gamma-Gamma CLV prediction most. High recency weight means recent buyers are reliably more valuable; high frequency weight means repeat-purchase cadence is the dominant predictor."
+            description="The model's ranking of which signals most strongly predict CLV. Higher bars mean that variable explains more of the variation in lifetime value across your base. Use this to understand what actually drives customer value in your business — not what you assume drives it."
           >
             <FeatureImportance features={feature_importance} />
           </Section>
@@ -176,7 +225,7 @@ export default function Dashboard({ resultsOverride }) {
         {/* Channel CLV */}
         <Section
           title="Avg predicted CLV by acquisition channel"
-          description="Lifetime value segmented by the channel that originally acquired the customer. Use this alongside CAC data to identify which channels are acquiring your highest-quality buyers, not just the most."
+          description="Compares the quality of customers acquired through each marketing channel, not just volume or conversion rate. A channel with high CAC can still be worth it if the customers it brings have significantly higher lifetime value. Use this alongside the CLV:CAC matrix below to make channel investment decisions."
         >
           <ChannelClv channelClv={channel_clv} />
         </Section>
@@ -185,16 +234,35 @@ export default function Dashboard({ resultsOverride }) {
         {clv_cac_matrix && (
           <Section
             title="CLV:CAC ratio by segment × channel"
-            description="Ratio > 3× is healthy. < 1× means you're acquiring customers at a loss relative to their predicted lifetime value. Use this matrix to reallocate budget toward high-ratio channel–segment combinations."
+            description="Divides each segment's average predicted CLV by the channel's cost-per-acquisition to produce a return ratio. A ratio above 3× indicates a healthy channel-segment pairing worth scaling. Below 1× means you're spending more to acquire those customers than they're predicted to return — redirect that budget toward higher-ratio combinations."
           >
             <ClvCacMatrix matrix={clv_cac_matrix} />
+          </Section>
+        )}
+
+        {/* Channel efficiency deep-dive */}
+        {channel_metrics?.length > 0 && (
+          <Section
+            title="Channel efficiency — full breakdown"
+            description="Every channel scored on conversion rate (CVR), cost per acquisition (CAC), average CLV of acquired customers, CLV:CAC ratio, and ROAS. Sort any column to find your best and worst channels. A high CLV:CAC with low volume means the channel is efficient but not yet scaled — an opportunity. High volume with low CLV:CAC means you're buying quantity over quality."
+          >
+            <ChannelMetricsTable channelMetrics={channel_metrics} channelClv={channel_clv} />
+          </Section>
+        )}
+
+        {channel_metrics?.length > 0 && (
+          <Section
+            title="Channel efficiency vs. scale"
+            description="X-axis = CLV:CAC ratio (efficiency). Y-axis = conversion volume (scale). Bubble size = total spend. Channels in the top-right quadrant are both efficient and scalable — they should receive the most budget. Channels in the top-left are efficient but small — test increasing spend. Bottom-right means you're spending a lot for low-quality customers."
+          >
+            <ChannelBubbleChart channelMetrics={channel_metrics} />
           </Section>
         )}
 
         {/* Customer table — click a row to open the NBA panel */}
         <Section
           title="Customer records (top 500 by CLV)"
-          description="Individual-level predictions sorted by predicted CLV. Click any row to see that customer's Next Best Actions — personalised recommendations derived from their segment, recency, and purchase history."
+          description="Your highest-value customers ranked by predicted CLV. Click any row to open a panel showing that customer's next best actions — specific, prioritised recommendations for service teams and marketers based on their individual signal combination."
         >
           <div style={{ position: 'relative' }}>
             <CustomerTable customers={customer_records} onRowClick={setSelectedCustomer} />
