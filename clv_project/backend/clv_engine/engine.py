@@ -358,67 +358,98 @@ def compute_clv_cac_matrix(
 
 def compute_feature_importance(rfm: pd.DataFrame) -> list[dict]:
     """
-    Ranks features by r² (numeric) or η² / eta-squared (categorical) with predicted CLV.
+    Ranks ALL available RFM columns by r² (numeric) or η² (categorical) correlation
+    with predicted CLV. Automatically discovers columns — no hardcoded list.
+
+    Excluded: model outputs, identifiers, date columns, and internal (_*) columns.
+    Categorical guard: columns with fewer than 2 or more than 50 unique values are
+    skipped (avoids near-constants and quasi-ID strings like raw customer IDs).
     """
+    # Columns that are model outputs, internal temporaries, or non-predictive identifiers
+    _EXCLUDE = {
+        "predicted_clv",        # target
+        "segment",              # output of segmentation, not a raw signal
+        "tenure_months",        # re-derived from T inside build_results
+        "first_purchase",       # datetime — not useful as a scalar
+        "last_purchase",        # datetime
+        "acquisition_date",     # datetime
+        "mean_order_value",     # intermediate; monetary_value is cleaner
+    }
+
+    # Human-readable labels for well-known columns; unknown columns get auto-labelled
+    _LABELS = {
+        "frequency":            "Purchase frequency",
+        "monetary_value":       "Avg order value (repeat)",
+        "recency":              "Recency (weeks)",
+        "T":                    "Customer tenure (weeks)",
+        "p_alive":              "P(still active)",
+        "predicted_purchases":  "Predicted future purchases",
+        "expected_aov":         "Expected AOV",
+        "n_transactions":       "Total transactions",
+        "total_revenue":        "Lifetime revenue",
+        "n_unique_products":    "Unique product categories",
+        "engagement_score":     "Engagement score",
+        "gender":               "Gender",
+        "acquisition_channel":  "Acquisition channel",
+        "customer_region":      "Region",
+        "age_group":            "Age group",
+        "loyalty_tier":         "Loyalty tier",
+        "customer_type":        "Customer type",
+    }
+
+    def _label(col: str) -> str:
+        return _LABELS.get(col, col.replace("_", " ").title())
+
     results = []
     target = rfm["predicted_clv"].dropna()
 
-    # Numeric features — Pearson r²
-    numeric_features = {
-        "frequency":          "Purchase frequency",
-        "monetary_value":     "Avg order value",
-        "recency":            "Recency (weeks)",
-        "T":                  "Customer tenure",
-        "p_alive":            "P(still active)",
-        "engagement_score":   "Engagement score",
-        "n_transactions":     "Total transactions",
-        "n_unique_products":  "Unique product categories",
-    }
-    for col, label in numeric_features.items():
-        if col not in rfm.columns:
+    for col in rfm.columns:
+        if col in _EXCLUDE or col.startswith("_"):
             continue
-        series = rfm[col].reindex(target.index).fillna(0)
-        if series.std() == 0:
-            continue
-        corr = series.corr(target)
-        if np.isnan(corr):
-            continue
-        results.append({
-            "feature":    label,
-            "importance": round(abs(float(corr ** 2)), 4),
-            "direction":  "positive" if corr > 0 else "negative",
-            "raw_corr":   round(float(corr), 4),
-        })
 
-    # Categorical features — η² (eta squared: variance explained by group membership)
-    cat_features = {
-        "gender":              "Gender",
-        "acquisition_channel": "Acquisition channel",
-        "customer_region":     "Region",
-    }
-    for col, label in cat_features.items():
-        if col not in rfm.columns:
-            continue
-        tmp = pd.DataFrame({"y": target, "g": rfm[col].reindex(target.index)}).dropna()
-        if len(tmp) < 10:
-            continue
-        grand_mean = tmp["y"].mean()
-        ss_total = float(((tmp["y"] - grand_mean) ** 2).sum())
-        if ss_total < 1e-10:
-            continue
-        ss_between = float(sum(
-            len(g) * (g["y"].mean() - grand_mean) ** 2
-            for _, g in tmp.groupby("g")
-        ))
-        eta_sq = round(min(1.0, ss_between / ss_total), 4)
-        if eta_sq <= 0:
-            continue
-        results.append({
-            "feature":    label,
-            "importance": eta_sq,
-            "direction":  "categorical",
-            "raw_corr":   None,
-        })
+        series = rfm[col].reindex(target.index)
+        dtype  = rfm[col].dtype
+
+        if pd.api.types.is_numeric_dtype(dtype):
+            # Pearson r² — skip zero-variance and constant columns
+            filled = series.fillna(0)
+            if filled.std() == 0:
+                continue
+            corr = filled.corr(target)
+            if np.isnan(corr):
+                continue
+            results.append({
+                "feature":    _label(col),
+                "importance": round(abs(float(corr ** 2)), 4),
+                "direction":  "positive" if corr > 0 else "negative",
+                "raw_corr":   round(float(corr), 4),
+            })
+
+        elif pd.api.types.is_object_dtype(dtype) or pd.api.types.is_categorical_dtype(dtype):
+            # η² (eta-squared) — skip near-constants and high-cardinality quasi-IDs
+            n_unique = series.nunique()
+            if n_unique < 2 or n_unique > 50:
+                continue
+            tmp = pd.DataFrame({"y": target, "g": series}).dropna()
+            if len(tmp) < 10:
+                continue
+            grand_mean  = tmp["y"].mean()
+            ss_total    = float(((tmp["y"] - grand_mean) ** 2).sum())
+            if ss_total < 1e-10:
+                continue
+            ss_between  = float(sum(
+                len(g) * (g["y"].mean() - grand_mean) ** 2
+                for _, g in tmp.groupby("g")
+            ))
+            eta_sq = round(min(1.0, ss_between / ss_total), 4)
+            if eta_sq <= 0:
+                continue
+            results.append({
+                "feature":    _label(col),
+                "importance": eta_sq,
+                "direction":  "categorical",
+                "raw_corr":   None,
+            })
 
     return sorted(results, key=lambda x: x["importance"], reverse=True)
 
