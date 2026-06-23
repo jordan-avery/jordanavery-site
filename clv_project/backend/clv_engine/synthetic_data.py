@@ -72,8 +72,16 @@ def generate_crm(
     rows = []
     cid_pad = len(str(n_customers))
 
+    # Pre-generate per-customer gender so it's consistent across all their transactions
+    genders = np.random.choice(
+        ["male", "female", "nonbinary"],
+        n_customers,
+        p=[0.48, 0.47, 0.05],
+    )
+
     for i in range(n_customers):
-        cid   = f"C{str(i+1).zfill(cid_pad)}"
+        cid    = f"C{str(i+1).zfill(cid_pad)}"
+        gender = genders[i]
         group = np.random.choice([0, 1, 2, 3], p=group_probs)
 
         acq_offset = int(np.random.beta(1.5, 2.0) * span)
@@ -121,6 +129,7 @@ def generate_crm(
                 "acquisition_channel": channel,
                 "acquisition_date":    acq_date.strftime("%Y-%m-%d"),
                 "customer_region":     region,
+                "gender":              gender,
             })
 
     df = pd.DataFrame(rows)

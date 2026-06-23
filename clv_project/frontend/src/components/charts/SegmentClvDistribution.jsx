@@ -1,10 +1,15 @@
 /**
- * SegmentClvDistribution.jsx — fixed
+ * SegmentClvDistribution.jsx
  *
- * Fix: ECharts 5 horizontal boxplot requires one series per data point
- * when you want per-row coloring. The single-series + encode approach
- * renders the axis labels but not the boxes. Split into one series per
- * segment so each gets its own itemStyle color.
+ * Horizontal box plots showing CLV spread within each segment.
+ *
+ * ECharts 5 horizontal boxplot: when you use one series per segment for
+ * independent coloring, each series' data array must align 1:1 with the
+ * yAxis categories. Pad positions that don't belong to this series with null.
+ *
+ * Props:
+ *   segmentClvDistribution : results.segment_clv_distribution
+ *   segments               : results.segments  (for counts)
  */
 
 import { useEffect, useRef } from 'react';
@@ -35,7 +40,7 @@ const SEGMENT_COLOR = {
   low_value:      '#888780',
 };
 
-// Order top-to-bottom in the chart (yAxis category order reversed so High Potential is on top)
+// Bottom-to-top in the chart (ECharts category axis: first item = bottom)
 const ORDER = ['low_value', 'at_risk', 'loyal', 'high_potential'];
 
 export default function SegmentClvDistribution({ segmentClvDistribution = [], segments = [] }) {
@@ -51,11 +56,12 @@ export default function SegmentClvDistribution({ segmentClvDistribution = [], se
 
       const dark = document.documentElement.classList.contains('dark') ||
         window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const textColor    = dark ? '#9c9a92' : '#73726c';
-      const gridColor    = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
-      const tooltipBg    = dark ? '#1a1a18' : '#ffffff';
-      const tooltipBorder= dark ? '#3a3a38' : '#e0dfd8';
+      const textColor     = dark ? '#9c9a92' : '#73726c';
+      const gridColor     = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+      const tooltipBg     = dark ? '#1a1a18' : '#ffffff';
+      const tooltipBorder = dark ? '#3a3a38' : '#e0dfd8';
 
+      // Build ordered data array — skip segments missing from results
       const data = ORDER
         .map(seg => segmentClvDistribution.find(d => d.segment === seg))
         .filter(Boolean);
@@ -63,18 +69,15 @@ export default function SegmentClvDistribution({ segmentClvDistribution = [], se
       const categoryNames = data.map(d => SEGMENT_LABEL[d.segment]);
       const countMap = Object.fromEntries((segments || []).map(s => [s.segment, s.count]));
 
-      // One boxplot series per segment for independent coloring.
-      // ECharts horizontal boxplot: xAxis = value, yAxis = category.
-      // Each series has a single data point at the correct y-category index.
-      const boxSeries = data.map((d) => ({
+      // One boxplot series per segment.
+      // Data array is padded with null at every position that isn't this segment
+      // so ECharts places each box on the correct yAxis category row.
+      const boxSeries = data.map((d, segIdx) => ({
         name: SEGMENT_LABEL[d.segment],
         type: 'boxplot',
-        data: [
-          {
-            value: [d.min, d.p25, d.median, d.p75, d.max],
-            name: SEGMENT_LABEL[d.segment],
-          }
-        ],
+        data: data.map((_, j) =>
+          j === segIdx ? [d.min, d.p25, d.median, d.p75, d.max] : null
+        ),
         itemStyle: {
           color: SEGMENT_COLOR[d.segment] + '30',
           borderColor: SEGMENT_COLOR[d.segment],
@@ -96,7 +99,7 @@ export default function SegmentClvDistribution({ segmentClvDistribution = [], se
         },
       }));
 
-      // Mean dots as scatter — one series per segment
+      // Mean dots — scatter with categorical yAxis accepts [x_value, 'Category Name']
       const meanSeries = data.map((d) => ({
         name: `${SEGMENT_LABEL[d.segment]} mean`,
         type: 'scatter',
@@ -111,7 +114,13 @@ export default function SegmentClvDistribution({ segmentClvDistribution = [], se
       chart.current.setOption({
         animation: true,
         grid: { left: 110, right: 30, top: 10, bottom: 44 },
-        tooltip: { trigger: 'item', backgroundColor: tooltipBg, borderColor: tooltipBorder, borderWidth: 0.5, textStyle: { color: textColor, fontSize: 12 } },
+        tooltip: {
+          trigger: 'item',
+          backgroundColor: tooltipBg,
+          borderColor: tooltipBorder,
+          borderWidth: 0.5,
+          textStyle: { color: textColor, fontSize: 12 },
+        },
         legend: { show: false },
         xAxis: {
           type: 'value',
@@ -141,12 +150,10 @@ export default function SegmentClvDistribution({ segmentClvDistribution = [], se
     });
   }, [segmentClvDistribution, segments]);
 
-  const hp = segmentClvDistribution.find(d => d.segment === 'high_potential');
-
   return (
     <div>
       <div ref={ref} style={{ width: '100%', height: 230 }} />
-      {hp && (
+      {segmentClvDistribution.length > 0 && (
         <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {['high_potential', 'loyal', 'at_risk', 'low_value'].map(segKey => {
             const d = segmentClvDistribution.find(x => x.segment === segKey);

@@ -81,21 +81,23 @@ def build_rfm(crm: pd.DataFrame, observation_end: Optional[str] = None) -> pd.Da
     else:
         obs_end = pd.to_datetime(observation_end)
 
-    # Core RFM aggregation
-    agg = (
-        crm.groupby("customer_id")
-        .agg(
-            first_purchase  = ("transaction_date", "min"),
-            last_purchase   = ("transaction_date", "max"),
-            n_transactions  = ("transaction_date", "count"),
-            total_revenue   = ("order_value",       "sum"),
-            mean_order_value= ("order_value",       "mean"),
-            acquisition_channel = ("acquisition_channel", "first"),
-            acquisition_date    = ("acquisition_date",    "first"),
-            customer_region     = ("customer_region",     "first"),
-        )
-        .reset_index()
+    # Core RFM aggregation — extend conditionally for optional CRM columns
+    agg_kwargs = dict(
+        first_purchase      = ("transaction_date", "min"),
+        last_purchase       = ("transaction_date", "max"),
+        n_transactions      = ("transaction_date", "count"),
+        total_revenue       = ("order_value",       "sum"),
+        mean_order_value    = ("order_value",       "mean"),
+        acquisition_channel = ("acquisition_channel", "first"),
+        acquisition_date    = ("acquisition_date",    "first"),
+        customer_region     = ("customer_region",     "first"),
     )
+    if "gender" in crm.columns:
+        agg_kwargs["gender"] = ("gender", "first")
+    if "product_category" in crm.columns:
+        agg_kwargs["n_unique_products"] = ("product_category", "nunique")
+
+    agg = crm.groupby("customer_id").agg(**agg_kwargs).reset_index()
 
     # BG/NBD convention: time in weeks, frequency = repeat purchases
     agg["T"]         = (obs_end - agg["first_purchase"]).dt.days / 7
@@ -346,22 +348,23 @@ def compute_clv_cac_matrix(
 
 def compute_feature_importance(rfm: pd.DataFrame) -> list[dict]:
     """
-    Ranks features by Pearson r² with predicted CLV.
+    Ranks features by r² (numeric) or η² / eta-squared (categorical) with predicted CLV.
     """
-    feature_map = {
-        "frequency":       "Purchase frequency",
-        "monetary_value":  "Avg order value",
-        "recency":         "Recency (weeks)",
-        "T":               "Customer tenure",
-        "p_alive":         "P(still active)",
-        "engagement_score":"Engagement score",
-        "n_transactions":  "Total transactions",
-    }
-
     results = []
     target = rfm["predicted_clv"].dropna()
 
-    for col, label in feature_map.items():
+    # Numeric features — Pearson r²
+    numeric_features = {
+        "frequency":          "Purchase frequency",
+        "monetary_value":     "Avg order value",
+        "recency":            "Recency (weeks)",
+        "T":                  "Customer tenure",
+        "p_alive":            "P(still active)",
+        "engagement_score":   "Engagement score",
+        "n_transactions":     "Total transactions",
+        "n_unique_products":  "Unique product categories",
+    }
+    for col, label in numeric_features.items():
         if col not in rfm.columns:
             continue
         series = rfm[col].reindex(target.index).fillna(0)
@@ -372,9 +375,39 @@ def compute_feature_importance(rfm: pd.DataFrame) -> list[dict]:
             continue
         results.append({
             "feature":    label,
-            "importance": round(abs(corr ** 2), 4),
+            "importance": round(abs(float(corr ** 2)), 4),
             "direction":  "positive" if corr > 0 else "negative",
-            "raw_corr":   round(corr, 4),
+            "raw_corr":   round(float(corr), 4),
+        })
+
+    # Categorical features — η² (eta squared: variance explained by group membership)
+    cat_features = {
+        "gender":              "Gender",
+        "acquisition_channel": "Acquisition channel",
+        "customer_region":     "Region",
+    }
+    for col, label in cat_features.items():
+        if col not in rfm.columns:
+            continue
+        tmp = pd.DataFrame({"y": target, "g": rfm[col].reindex(target.index)}).dropna()
+        if len(tmp) < 10:
+            continue
+        grand_mean = tmp["y"].mean()
+        ss_total = float(((tmp["y"] - grand_mean) ** 2).sum())
+        if ss_total < 1e-10:
+            continue
+        ss_between = float(sum(
+            len(g) * (g["y"].mean() - grand_mean) ** 2
+            for _, g in tmp.groupby("g")
+        ))
+        eta_sq = round(min(1.0, ss_between / ss_total), 4)
+        if eta_sq <= 0:
+            continue
+        results.append({
+            "feature":    label,
+            "importance": eta_sq,
+            "direction":  "categorical",
+            "raw_corr":   None,
         })
 
     return sorted(results, key=lambda x: x["importance"], reverse=True)
@@ -438,22 +471,24 @@ def build_results(
         .to_dict(orient="records")
     )
 
-    # Drop NaN/Inf before building the histogram — percentile on NaN produces NaN
-    # edges, which Python 3.14's strict JSON encoder rejects.
-    clv_valid = rfm["predicted_clv"].replace([np.inf, -np.inf], np.nan).dropna()
-    if len(clv_valid) > 1:
-        # Equal-width bins capped at the 99th percentile so the right-skewed shape
-        # is visible. Percentile bins (equal-frequency) produce identical bar heights.
-        # Values above p99 are clipped into the last bin rather than excluded.
-        p99  = float(np.percentile(clv_valid, 99))
+    # CLV histogram: exclude customers with near-zero predicted activity (predicted_purchases < 0.1).
+    # BG/NBD correctly marks long-lapsed single-purchase customers as churned (≈$0 future value).
+    # Keeping them inflates the first bin and obscures the active-customer distribution.
+    hist_mask     = rfm["predicted_purchases"] >= 0.1
+    clv_hist      = rfm.loc[hist_mask, "predicted_clv"].replace([np.inf, -np.inf], np.nan).dropna()
+    low_clv_count = int(len(rfm) - len(clv_hist))
+    if len(clv_hist) > 1:
+        p99  = float(np.percentile(clv_hist, 99))
         bins = np.linspace(0, max(p99, 1.0), 21)
-        hist, edges = np.histogram(clv_valid.clip(upper=p99), bins=bins)
+        hist, edges = np.histogram(clv_hist.clip(upper=p99), bins=bins)
         clv_distribution = [
             {"bin_start": round(float(edges[i]), 0), "count": int(hist[i])}
             for i in range(len(hist))
         ]
     else:
         clv_distribution = []
+    kpis["low_activity_count"] = low_clv_count
+    kpis["low_activity_pct"]   = round(low_clv_count / len(rfm) * 100, 1)
 
     channel_clv = (
         rfm.groupby("acquisition_channel")
