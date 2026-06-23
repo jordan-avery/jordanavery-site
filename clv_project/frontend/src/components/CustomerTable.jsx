@@ -80,7 +80,7 @@ export default function CustomerTable({ customers, onRowClick }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-neutral-800">
-              {['ID', 'Segment', 'Predicted CLV', 'Frequency', 'Avg AOV', 'P(Alive)', 'Revenue', 'Channel', 'Region'].map((h) => (
+              {['ID', 'Segment', 'Trend', 'Predicted CLV', 'Frequency', 'Avg AOV', 'P(Alive)', 'Revenue', 'Channel', 'Region'].map((h) => (
                 <th key={h} className="text-left py-2 px-3 text-neutral-500 font-medium text-xs uppercase tracking-wider whitespace-nowrap">
                   {h}
                 </th>
@@ -100,6 +100,12 @@ export default function CustomerTable({ customers, onRowClick }) {
                   <span className={SEGMENT_BADGE[row.segment] ?? 'badge-muted'}>
                     {SEGMENT_LABEL[row.segment] ?? row.segment}
                   </span>
+                </td>
+                <td className="py-2 px-3">
+                  {row.mobility_direction === 'ascending'  && <span style={{ color: '#1D9E75', fontSize: 12 }}>↗</span>}
+                  {row.mobility_direction === 'descending' && <span style={{ color: '#E24B4A', fontSize: 12 }}>↘</span>}
+                  {row.mobility_direction === 'stable'     && <span style={{ color: '#888780', fontSize: 12 }}>→</span>}
+                  {(!row.mobility_direction || row.mobility_direction === 'new') && <span style={{ color: '#888780', fontSize: 12 }}>—</span>}
                 </td>
                 <td className="py-2 px-3 font-semibold text-white">${Number(row.predicted_clv).toLocaleString()}</td>
                 <td className="py-2 px-3 text-neutral-300">{row.frequency}</td>

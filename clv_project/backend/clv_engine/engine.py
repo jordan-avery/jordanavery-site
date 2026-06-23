@@ -31,6 +31,16 @@ from sklearn.preprocessing import StandardScaler
 
 warnings.filterwarnings("ignore")  # lifetimes emits convergence noise
 
+try:
+    from clv_engine.phase2_analytics import (
+        cohort_retention, cohort_retention_summary,
+        clv_trajectory, compute_mobility,
+        channel_split_metrics, offer_playbook,
+    )
+    _PHASE2_AVAILABLE = True
+except ImportError:
+    _PHASE2_AVAILABLE = False
+
 
 # ---------------------------------------------------------------------------
 # Data source container
@@ -587,10 +597,57 @@ def build_results(
         "segment_clv_distribution": segment_clv_distribution,
         "tenure_clv_scatter":       scatter_sample,
         "channel_metrics":          channel_metrics,
+        # Phase 2 slots — populated below if phase2_analytics is available
+        "cohort_retention":         None,
+        "cohort_retention_summary": None,
+        "clv_trajectory":           None,
+        "channel_split":            None,
+        "offer_playbook":           None,
     }
 
     if data_sources.media_spend is not None:
         result["clv_cac_matrix"] = compute_clv_cac_matrix(rfm, data_sources.media_spend)
+
+    # --- Phase 2 analytics ---------------------------------------------------
+    if _PHASE2_AVAILABLE:
+        # 2A: Cohort retention curves
+        try:
+            _cohorts = cohort_retention(data_sources.crm)
+            result["cohort_retention"]         = _cohorts
+            result["cohort_retention_summary"] = cohort_retention_summary(_cohorts)
+        except Exception:
+            pass
+
+        # 2B: CLV trajectory by segment
+        try:
+            result["clv_trajectory"] = clv_trajectory(data_sources.crm, rfm)
+        except Exception:
+            pass
+
+        # 2C: Mobility score — enrich customer records in-place
+        try:
+            _mob_dir, _mob_score = compute_mobility(data_sources.crm, rfm)
+            for rec in result["customer_records"]:
+                cid = rec.get("id")
+                rec["mobility_direction"] = _mob_dir.get(cid, "new")
+                rec["mobility_score"]     = round(float(_mob_score.get(cid, 0.0)), 3)
+        except Exception:
+            pass
+
+        # 2D: Channel acquisition vs. retention split
+        try:
+            if data_sources.media_spend is not None:
+                result["channel_split"] = channel_split_metrics(
+                    data_sources.media_spend, channel_clv
+                )
+        except Exception:
+            pass
+
+        # 2E: Offer playbook (requires product_category in CRM)
+        try:
+            result["offer_playbook"] = offer_playbook(data_sources.crm, rfm)
+        except Exception:
+            pass
 
     return result
 
@@ -798,10 +855,14 @@ def _build_intervention_queue(customer_records: list, seg_avg_clv: dict) -> tupl
             "total_expected_gain": round(float(seg_avg_clv.get("loyal") or 200) * loyal_n * 0.08, 0),
         })
 
+    _individual = [q for q in queue if q.get("intervention_type") == "individual"]
     summary = {
         "immediate_count":     sum(1 for q in queue if q.get("urgency") == "immediate"),
         "this_week_count":     sum(1 for q in queue if q.get("urgency") == "this_week"),
-        "individual_count":    sum(1 for q in queue if q.get("intervention_type") == "individual"),
+        "individual_count":    len(_individual),
+        "recovery_count":      sum(1 for q in _individual if q.get("segment") == "at_risk"),
+        "retention_count":     sum(1 for q in _individual if q.get("segment") == "loyal"),
+        "growth_count":        sum(1 for q in _individual if q.get("segment") == "high_potential"),
         "total_expected_gain": sum(
             q.get("expected_clv_gain") or q.get("total_expected_gain") or 0
             for q in queue

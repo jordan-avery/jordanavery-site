@@ -181,14 +181,15 @@ export default function InterventionQueue({ queue = [], summary = {} }) {
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8, marginBottom: 12 }}>
           {[
-            { label: "Immediate",   value: summary.immediate_count,  color: "#E24B4A" },
-            { label: "This week",   value: summary.this_week_count,   color: "#EF9F27" },
-            { label: "Individuals", value: summary.individual_count,  color: "var(--color-text-primary)" },
-            { label: "Total gain",  value: fmt(summary.total_expected_gain || 0), color: "var(--color-text-success)" },
-          ].map(({ label, value, color }) => (
+            { label: "Recovery",  value: summary.recovery_count,  color: "#BA7517", sub: "at-risk" },
+            { label: "Retention", value: summary.retention_count, color: "#378ADD", sub: "loyal" },
+            { label: "Growth",    value: summary.growth_count,    color: "#1D9E75", sub: "high-potential" },
+            { label: "Total gain", value: fmt(summary.total_expected_gain || 0), color: "var(--color-text-success)", sub: null },
+          ].map(({ label, value, color, sub }) => (
             <div key={label} style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "8px 10px" }}>
               <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 2 }}>{label}</div>
               <div style={{ fontSize: 16, fontWeight: 500, color }}>{value ?? "—"}</div>
+              {sub && <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginTop: 1 }}>{sub}</div>}
             </div>
           ))}
         </div>

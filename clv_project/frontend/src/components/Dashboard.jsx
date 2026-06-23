@@ -14,6 +14,9 @@ import ChannelMetricsTable from './charts/ChannelMetricsTable.jsx';
 import ChannelBubbleChart from './charts/ChannelBubbleChart.jsx';
 import DecisionIntelligenceSection from './DecisionIntelligenceSection.jsx';
 import NBAPanel from './NBAPanel.jsx';
+import CohortRetention from './charts/CohortRetention.jsx';
+import ClvTrajectory from './charts/ClvTrajectory.jsx';
+import OfferPlaybook from './OfferPlaybook.jsx';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -135,6 +138,7 @@ export default function Dashboard({ resultsOverride }) {
     kpis, segments, clv_distribution, channel_clv, feature_importance,
     customer_records, clv_cac_matrix, monthly_trend, segment_clv_distribution,
     tenure_clv_scatter, channel_metrics,
+    cohort_retention, cohort_retention_summary, clv_trajectory, offer_playbook,
   } = results;
 
   return (
@@ -331,6 +335,31 @@ export default function Dashboard({ resultsOverride }) {
                 <ChannelBubbleChart channelMetrics={channel_metrics} />
               </Section>
             )}
+
+            {/* Phase 2 — cohort retention + CLV trajectory */}
+            {(cohort_retention || clv_trajectory?.length > 0) && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {cohort_retention && (
+                  <Section
+                    title="Cohort retention curves"
+                    description="% of each quarterly acquisition cohort still purchasing at tenure milestones. Red line = average across all cohorts. Declining early-cohort retention signals a product or onboarding issue worth investigating."
+                  >
+                    <CohortRetention
+                      cohortRetention={cohort_retention}
+                      summary={cohort_retention_summary || {}}
+                    />
+                  </Section>
+                )}
+                {clv_trajectory?.length > 0 && (
+                  <Section
+                    title="CLV trajectory by segment"
+                    description="Avg cumulative revenue per customer at tenure milestones. A flattening curve after month 12 means the intervention window is closing — act before loyalty erodes."
+                  >
+                    <ClvTrajectory clvTrajectory={clv_trajectory} />
+                  </Section>
+                )}
+              </div>
+            )}
           </>
         )}
 
@@ -355,11 +384,21 @@ export default function Dashboard({ resultsOverride }) {
         {/* PAGE 3 — Decision Intelligence                                   */}
         {/* ---------------------------------------------------------------- */}
         {page === 'intelligence' && (
-          <DecisionIntelligenceSection
-            results={results}
-            apiBase=""
-            sessionToken={sessionToken}
-          />
+          <>
+            {offer_playbook !== undefined && (
+              <Section
+                title="Offer playbook"
+                description="Product categories over-indexed (lift &gt; 1.0×) vs. the overall mix for each customer tier. Match campaign creative and SKU promotion to each segment's purchasing pattern to lift conversion."
+              >
+                <OfferPlaybook offerPlaybook={offer_playbook} />
+              </Section>
+            )}
+            <DecisionIntelligenceSection
+              results={results}
+              apiBase=""
+              sessionToken={sessionToken}
+            />
+          </>
         )}
 
       </main>
